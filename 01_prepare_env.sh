@@ -6,9 +6,12 @@ echo "prepare_env.sh ..."
 set -euo pipefail
 mkdir -p results 00_helpers
 
-### 1. Clone benchmark
-[ -d DeathStarBench ] || git clone https://github.com/delimitrou/DeathStarBench.git
-cd DeathStarBench/socialNetwork
+### 1. Clone benchmark (only socialNetwork for breavity)
+git clone --depth 1 --filter=blob:none \
+          --sparse https://github.com/delimitrou/DeathStarBench.git
+cd DeathStarBench
+git sparse-checkout set socialNetwork
+cd socialNetwork
 
 ### 2. System packages (Ubuntu)
 sudo apt-get update -qq
