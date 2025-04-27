@@ -7,7 +7,7 @@ docker compose -f docker-compose.yml up -d \
   --scale text-service=3 \
   --scale media-service=3
 
-wrk2/wrk -t2 -c32 -d30s -R300 \
+wrk -t2 -c32 -d30s -R300 \
   -s scripts/social-network/mixed-workload.lua \
   http://localhost:8080/index.html >/dev/null
 
