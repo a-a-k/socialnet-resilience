@@ -46,7 +46,9 @@ if [ ! -x "$WRK2_DIR/wrk" ]; then
   make -C "$WRK2_DIR"
 fi
 
-export PATH="$WRK2_DIR:$PATH"
-echo "[bootstrap] wrk2 ready: $(command -v wrk)"
+if [ ! -x /usr/local/bin/wrk ]; then
+  sudo install -m 0755 "$WRK2_DIR/wrk" /usr/local/bin/wrk
+  echo "[bootstrap] wrk2 installed ➜ $(command -v wrk)"
+fi
 
 echo "✅ Environment prepared"
