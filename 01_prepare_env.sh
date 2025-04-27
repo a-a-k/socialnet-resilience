@@ -33,11 +33,6 @@ if ! command -v docker >/dev/null; then
   sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 fi
 
-git clone --depth 1 https://github.com/giltene/wrk2.git _wrk2_build
-make -C _wrk2_build
-mv _wrk2_build/wrk wrk2/
-rm -rf _wrk2_build
-
 ### 3. Python venv
 python3 -m venv venv
 source venv/bin/activate
@@ -47,5 +42,17 @@ pip install -q networkx numpy
 ### 4. Helper scripts
 cp ../../00_helpers/just_kill.sh 00_helpers/
 cp ../../resilience.py          .
+
+### 5. Build wrk2 load-generator
+
+WRK2_DIR="$HOME/wrk2"
+if [ ! -x "$WRK2_DIR/wrk" ]; then
+  echo "[bootstrap] cloning & building wrk2..."
+  git clone --depth 1 https://github.com/giltene/wrk2.git  "$WRK2_DIR"
+  make -C "$WRK2_DIR"
+fi
+
+export PATH="$WRK2_DIR:$PATH"
+echo "[bootstrap] wrk2 ready: $(command -v wrk)"
 
 echo "✅ Environment prepared"
