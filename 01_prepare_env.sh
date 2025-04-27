@@ -4,7 +4,7 @@ echo "prepare_env.sh ..."
 
 # One-time environment bootstrap.
 set -euo pipefail
-mkdir -p results 00_helpers
+mkdir -p results
 
 ### 1. Clone benchmark (only socialNetwork for breavity)
 git clone --depth 1 --filter=blob:none \
@@ -12,6 +12,8 @@ git clone --depth 1 --filter=blob:none \
 cd DeathStarBench
 git sparse-checkout set socialNetwork
 cd socialNetwork
+
+mkdir -p 00_helpers
 
 ### 2. System packages (Ubuntu)
 sudo apt-get update -qq
