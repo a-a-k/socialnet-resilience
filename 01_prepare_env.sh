@@ -33,6 +33,11 @@ if ! command -v docker >/dev/null; then
   sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 fi
 
+git clone --depth 1 https://github.com/giltene/wrk2.git _wrk2_build
+make -C _wrk2_build
+mv _wrk2_build/wrk wrk2/
+rm -rf _wrk2_build
+
 ### 3. Python venv
 python3 -m venv venv
 source venv/bin/activate
