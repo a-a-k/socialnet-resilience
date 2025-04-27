@@ -3,7 +3,7 @@ set -euo pipefail; cd DeathStarBench/socialNetwork
 docker compose -f docker-compose.yml up -d       # 1 copy each
 
 # warm-up traffic (30 s, 300 RPS)
-wrk2/scripts/wrk2/wrk -t2 -c32 -d30s -R300 \
+wrk2/wrk -t2 -c32 -d30s -R300 \
   -s scripts/social-network/mixed-workload.lua \
   http://localhost:8080/index.html >/dev/null
 
