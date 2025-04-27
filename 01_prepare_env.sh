@@ -2,11 +2,11 @@
 
 echo "prepare_env.sh ..."
 
-# One-time environment bootstrap.
+# One-time environment bootstrap
 set -euo pipefail
 mkdir -p results
 
-### 1. Clone benchmark (only socialNetwork for breavity)
+### Clone benchmark (only socialNetwork for breavity)
 git clone --depth 1 --filter=blob:none \
           --sparse https://github.com/delimitrou/DeathStarBench.git
 cd DeathStarBench
@@ -15,7 +15,7 @@ cd socialNetwork
 
 mkdir -p 00_helpers
 
-### 2. System packages (Ubuntu)
+### System packages (Ubuntu)
 sudo apt-get update -qq
 sudo apt-get install -y jq bc git python3-venv
 
@@ -33,17 +33,11 @@ if ! command -v docker >/dev/null; then
   sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 fi
 
-### 3. Python venv
-python3 -m venv venv
-source venv/bin/activate
-pip install -q --upgrade pip
-pip install -q networkx numpy
-
-### 4. Helper scripts
+### Helper scripts
 cp ../../00_helpers/just_kill.sh 00_helpers/
 cp ../../resilience.py          .
 
-### 5. Build wrk2 load-generator
+### Build wrk2 load-generator
 
 WRK2_DIR="$HOME/wrk2"
 if [ ! -x "$WRK2_DIR/wrk" ]; then
