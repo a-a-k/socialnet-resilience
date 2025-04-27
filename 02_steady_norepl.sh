@@ -9,7 +9,7 @@ docker compose -f docker-compose.yml up -d       # 1 copy each
 echo "wrk ..."
 
 ### data
-python3 scripts/init_social_graph.py --graph 1000 --post 10000
+python3 scripts/init_social_graph.py --graph socfb-Reed98
 wrk -t2 -c32 -d30s -R1000 -s wrk2/scripts/social-network/compose-post.lua http://localhost:8080/index.html
 echo "✅ data primed"
 
