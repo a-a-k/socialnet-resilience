@@ -4,7 +4,7 @@ docker compose -f docker-compose.yml up -d       # 1 copy each
 
 # warm-up traffic (30 s, 300 RPS)
 wrk -t2 -c32 -d30s -R300 \
-  -s scripts/social-network/mixed-workload.lua \
+  -s wrk2/scripts/social-network/mixed-workload.lua \
   http://localhost:8080/index.html >/dev/null
 
 # Jaeger deps & theoretical R_avg
