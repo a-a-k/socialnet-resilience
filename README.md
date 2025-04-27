@@ -10,3 +10,6 @@ chmod +x *.sh 00_helpers/*.sh
 
 # replica experiment
 ./pipeline_repl.sh
+```
+
+Output JSONs appear in `results/summary_*.json`.
