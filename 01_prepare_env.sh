@@ -6,11 +6,9 @@ echo "prepare_env.sh ..."
 set -euo pipefail
 mkdir -p results
 
-### Clone benchmark (only socialNetwork for breavity)
-git clone --depth 1 --filter=blob:none \
-          --sparse https://github.com/delimitrou/DeathStarBench.git
+### Clone benchmark
+git clone https://github.com/delimitrou/DeathStarBench.git
 cd DeathStarBench
-git sparse-checkout set socialNetwork
 cd socialNetwork
 
 mkdir -p 00_helpers
