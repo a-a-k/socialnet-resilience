@@ -1,7 +1,7 @@
 ## Quick start
 
 ```bash
-git clone https://github.com/your-org/socialnet-resilience
+git clone https://github.com/a-a-k/socialnet-resilience
 cd socialnet-resilience
 chmod +x *.sh 00_helpers/*.sh
 
