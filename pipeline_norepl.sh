@@ -5,7 +5,7 @@ if [ ! -d venv ]; then
   echo "🔧  creating venv ..."
   python3 -m venv venv
   ./venv/bin/pip install -q --upgrade pip
-  ./venv/bin/pip install -q networkx numpy
+  ./venv/bin/pip install -q networkx numpy aiohttp
 fi
 
 source ./venv/bin/activate
