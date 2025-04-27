@@ -10,7 +10,7 @@ echo "wrk ..."
 
 ### data
 python3 scripts/init_social_graph.py --graph socfb-Reed98
-wrk -t2 -c32 -d30s -R1000 -s wrk2/scripts/social-network/compose-post.lua http://localhost:8080/index.html
+python3 scripts/init_social_graph.py --graph socfb-Reed98 --compose --ip 127.0.0.1 --port 8080
 echo "✅ data primed"
 
 echo "workload ..."
