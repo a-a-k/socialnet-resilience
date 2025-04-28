@@ -1,6 +1,6 @@
 services:
   jaeger-agent:
-    image: jaegertracing/all-in-one:1.48
+    image: jaegertracing/all-in-one:1.62
     command: ["--memory.max-traces=50000"]
     ports:
       - "16686:16686"
