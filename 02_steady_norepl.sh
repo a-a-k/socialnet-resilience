@@ -18,7 +18,9 @@ wrk -t2 -c32 -d30s -R300 \
   -s wrk2/scripts/social-network/mixed-workload.lua \
   http://localhost:8080/index.html
 
+sleep 60
 echo "graph ..."
+
 # Jaeger deps & theoretical R_avg
 ts=$(($(date +%s%N)/1000000))
 curl -s "http://localhost:16686/api/dependencies?endTs=$ts&lookback=3600000" \
