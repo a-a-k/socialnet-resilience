@@ -16,7 +16,8 @@ mkdir -p 00_helpers
 
 ### System packages (Ubuntu)
 sudo apt-get update -qq
-sudo apt-get install -y jq bc git python3-venv lua-socket
+sudo apt-get install -y jq bc git python3-venv lua-socket luarocks
+sudo luarocks install luasocket
 
 if ! command -v docker >/dev/null; then
   echo "[bootstrap] Installing Docker CE…"
