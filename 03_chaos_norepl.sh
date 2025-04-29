@@ -22,7 +22,7 @@ for r in $(seq 1 "$N"); do
 
   echo "workload done"
   echo "gathering data..."
-  errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' logfile |
+  errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' "$logfile" |
            awk '{print $NF}' || echo 0)
   total=$(grep -Eo '[0-9]+ requests in' "$logfile" |
           awk '{print $1}' || echo 0)
