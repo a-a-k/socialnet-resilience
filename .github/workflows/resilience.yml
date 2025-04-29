@@ -44,7 +44,7 @@ jobs:
           ./pipeline_repl.sh
           
       - name: Upload results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: resilience-results
           path: DeathStarBench/socialNetwork/results/*.json
