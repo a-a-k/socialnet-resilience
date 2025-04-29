@@ -27,6 +27,9 @@ jobs:
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: ${{ runner.os }}-buildx-
 
+      - name: Make scripts executable
+        run: chmod +x $(git ls-files '*.sh')
+        
       - name: Run pipeline_norepl
         env:
           COMPOSE_DOCKER_CLI_BUILD: 1
