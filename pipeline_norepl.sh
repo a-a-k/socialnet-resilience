@@ -17,6 +17,7 @@ echo "✅  venv activated ($(python -V))"
 
 jq -s '.' DeathStarBench/socialNetwork/results/*_base.json \
           DeathStarBench/socialNetwork/results/02_meta.json \
+          DeathStarBench/socialNetwork/results/chaos_runs.json \
         > DeathStarBench/socialNetwork/results/summary_norepl.json
         
 echo "==> summary_norepl.json ready"
