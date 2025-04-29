@@ -16,7 +16,7 @@ mkdir -p 00_helpers
 
 ### System packages (Ubuntu)
 sudo apt-get update -qq
-sudo apt-get install -y jq bc git python3-venv
+sudo apt-get install -y jq bc git python3-venv lua-socket
 
 if ! command -v docker >/dev/null; then
   echo "[bootstrap] Installing Docker CE…"
