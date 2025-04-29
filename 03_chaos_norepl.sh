@@ -10,10 +10,11 @@ for r in $(seq 1 "$N"); do
 
   ids=$(docker ps --filter "name=socialnetwork" -q |
         awk 'BEGIN{srand()} {if (rand()<0.3) print $0}')
+        
   if [ -n "$ids" ]; then docker kill $ids || true; fi
 
   wrk -t2 -c64 -d60s \
-      -s scripts/social-network/mixed-workload.lua \
+      -s wrk2/scripts/social-network/mixed-workload.lua \
          http://localhost:8080/index.html > wrk1.log 2>&1
 
   errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' wrk1.log |
