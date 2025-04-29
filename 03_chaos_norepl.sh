@@ -26,7 +26,7 @@ for r in $(seq 1 "$N"); do
         '{round:$n,total:$t,errors:$e}' \
         >> results/chaos_runs.json
 
-  docker compose restart $(docker compose ps -q) >/dev/null
+  docker compose restart $(docker compose config --services)
   sleep 40
 done
       
