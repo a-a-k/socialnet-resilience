@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail; cd DeathStarBench/socialNetwork
-docker compose -f docker-compose.yml up -d \
+docker compose up -d \
   --scale compose-post-service=3 \
   --scale home-timeline-service=3 \
   --scale user-timeline-service=3 \
@@ -9,7 +9,7 @@ docker compose -f docker-compose.yml up -d \
 
 wrk -t2 -c32 -d30s -R300 \
   -s scripts/social-network/mixed-workload.lua \
-  http://localhost:8080/index.html >/dev/null
+  http://localhost:8080/index.html
 
 ts=$(($(date +%s%N)/1000000))
 curl -s "http://localhost:16686/api/dependencies?endTs=$ts&lookback=3600000" \
