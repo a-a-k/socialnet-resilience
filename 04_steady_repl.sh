@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail; cd DeathStarBench/socialNetwork
+mkdir results
+
 docker compose up -d \
   --scale compose-post-service=3 \
   --scale home-timeline-service=3 \
