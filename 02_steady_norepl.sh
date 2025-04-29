@@ -3,7 +3,7 @@
 echo "compose ..."
 set -euo pipefail; cd DeathStarBench/socialNetwork
 docker compose down
-docker compose -f docker-compose.yml up -d       # 1 copy each
+docker compose up -d
 
 # warm-up traffic (30 s, 300 RPS)
 echo "wrk ..."
