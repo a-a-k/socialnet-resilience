@@ -9,7 +9,6 @@ docker compose up -d
 echo "wrk ..."
 
 ### data
-python3 scripts/init_social_graph.py --graph socfb-Reed98
 python3 scripts/init_social_graph.py --graph socfb-Reed98 --compose --ip 127.0.0.1 --port 8080
 echo "✅ data primed"
 
