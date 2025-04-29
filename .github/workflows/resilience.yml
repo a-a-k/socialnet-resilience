@@ -47,6 +47,7 @@ jobs:
           ./pipeline_repl.sh
           
       - name: Upload results
+        if: ${{ always() }}  
         uses: actions/upload-artifact@v4
         with:
           name: resilience-results
