@@ -1,21 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail; cd DeathStarBench/socialNetwork
-bash 00_helpers/just_kill.sh 0.30 & chaos=$!
-
-wrk -t2 -c64 -d60s -R300 \
-  -s wrk2/scripts/social-network/mixed-workload.lua \
-  http://localhost:8080/index.html > wrk1.log 2>&1
-  
-kill $chaos || true
-
-errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' wrk1.log \
-         | awk '{print $NF}' || echo 0)
-total=$(grep -Eo '[0-9]+ requests in' wrk1.log \
-        | awk '{print $1}' || echo 0)
+N=${1:-50} 
 
 mkdir -p results
-jq -n --argjson t "$total" --argjson e "$errors" \
-      '{stage:"chaos_norepl", total:$t, errors:$e}' \
-      > results/live_base.json
+touch results/chaos_runs.json
+
+for r in $(seq 1 "$N"); do
+  echo "▶️  chaos round $r / $N"
+
+  ids=$(docker ps --filter "name=socialnetwork" -q |
+        awk 'BEGIN{srand()} {if (rand()<0.3) print $0}')
+  if [ -n "$ids" ]; then docker kill $ids || true; fi
+
+  wrk -t2 -c64 -d60s \
+      -s scripts/social-network/mixed-workload.lua \
+         http://localhost:8080/index.html > wrk1.log 2>&1
+
+  errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' wrk1.log |
+           awk '{print $NF}' || echo 0)
+  total=$(grep -Eo '[0-9]+ requests in' wrk1.log |
+          awk '{print $1}' || echo 0)
+
+  jq -n --argjson t "$total" --argjson e "$errors" --argjson n "$r" \
+        '{round:$n,total:$t,errors:$e}' \
+        >> results/chaos_runs.json
+
+  docker compose restart $(docker compose ps -q) >/dev/null
+  sleep 40
+done
       
 echo "✅ chaos_norepl done"
