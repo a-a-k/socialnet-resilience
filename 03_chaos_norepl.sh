@@ -32,7 +32,7 @@ for r in $(seq 1 "$N"); do
 
   echo "done, restarting services..."
   docker compose restart $(docker compose config --services)
-  sleep 40
+  sleep 60
 done
       
 echo "✅ chaos_norepl done"
