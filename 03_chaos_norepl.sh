@@ -4,7 +4,7 @@ bash 00_helpers/just_kill.sh 0.30 & chaos=$!
 
 wrk -t2 -c64 -d60s -R300 \
   -s wrk2/scripts/social-network/mixed-workload.lua \
-  http://localhost:8080/index.html > wrk.log 2>&1
+  http://localhost:8080/index.html > wrk1.log 2>&1
   
 kill $chaos || true
 
