@@ -7,6 +7,8 @@ touch results/chaos_runs.json
 
 for r in $(seq 1 "$N"); do
   echo "▶️  chaos round $r / $N"
+  echo "restarting services..."
+  docker compose restart $(docker compose config --services)
   
   logfile="wrk1-${r}.log"
   
@@ -32,8 +34,7 @@ for r in $(seq 1 "$N"); do
         '{round:$n,total:$t,errors:$e}' \
         >> results/chaos_runs.json
 
-  echo "done, restarting services..."
-  docker compose restart $(docker compose config --services)
+  echo "done"
   sleep 100
 done
       
