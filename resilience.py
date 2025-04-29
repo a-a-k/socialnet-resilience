@@ -8,7 +8,7 @@ import json, random, numpy as np, networkx as nx, argparse, sys
 ap = argparse.ArgumentParser()
 ap.add_argument("deps", help="Jaeger deps.json")
 ap.add_argument("-o", "--out", help="store result JSON here")
-ap.add_argument("--samples", type=int, default=5000)
+ap.add_argument("--samples", type=int, default=50)
 ap.add_argument("--p_fail",  type=float, default=0.30)
 args = ap.parse_args()
 
