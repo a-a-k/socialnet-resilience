@@ -13,9 +13,9 @@ for r in $(seq 1 "$N"); do
         
   if [ -n "$ids" ]; then docker kill $ids || true; fi
 
-  wrk -t2 -c64 -d60s \
-      -s wrk2/scripts/social-network/mixed-workload.lua \
-         http://localhost:8080/index.html > wrk1.log 2>&1
+  wrk -t2 -c32 -d30s -R300 \
+  -s wrk2/scripts/social-network/mixed-workload.lua \
+  http://localhost:8080/index.html > wrk1.log 2>&1
 
   errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' wrk1.log |
            awk '{print $NF}' || echo 0)
