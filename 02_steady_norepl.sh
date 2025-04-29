@@ -2,6 +2,8 @@
 
 echo "compose ..."
 set -euo pipefail; cd DeathStarBench/socialNetwork
+mkdir results
+
 docker compose down
 docker compose up -d
 
