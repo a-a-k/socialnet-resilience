@@ -8,9 +8,9 @@ wrk -t2 -c64 -d60s -R300 \
   
 kill $chaos || true
 
-errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' wrk.log \
+errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' wrk1.log \
          | awk '{print $NF}' || echo 0)
-total=$(grep -Eo '[0-9]+ requests in' wrk.log \
+total=$(grep -Eo '[0-9]+ requests in' wrk1.log \
         | awk '{print $1}' || echo 0)
 
 mkdir -p results
