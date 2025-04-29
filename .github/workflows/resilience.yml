@@ -27,7 +27,7 @@ jobs:
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: ${{ runner.os }}-buildx-
 
-      - name: Run pipeline
+      - name: Run pipeline_norepl
         env:
           COMPOSE_DOCKER_CLI_BUILD: 1
           DOCKER_BUILDKIT: 1
@@ -35,6 +35,14 @@ jobs:
           chmod +x pipeline_norepl.sh
           ./pipeline_norepl.sh
 
+      - name: Run pipeline_repl
+        env:
+          COMPOSE_DOCKER_CLI_BUILD: 1
+          DOCKER_BUILDKIT: 1
+        run: |
+          chmod +x pipeline_repl.sh
+          ./pipeline_repl.sh
+          
       - name: Upload results
         uses: actions/upload-artifact@v3
         with:
