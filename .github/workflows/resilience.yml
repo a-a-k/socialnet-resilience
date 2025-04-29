@@ -1,0 +1,42 @@
+name: SocialNet-Resilience
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bench:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free space
+        run: |
+          sudo rm -rf /opt/hostedtoolcache /usr/local/lib/android || true
+
+      - uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-buildx-
+
+      - name: Run pipeline
+        env:
+          COMPOSE_DOCKER_CLI_BUILD: 1
+          DOCKER_BUILDKIT: 1
+        run: |
+          chmod +x pipeline_norepl.sh
+          ./pipeline_norepl.sh
+
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: resilience-results
+          path: DeathStarBench/socialNetwork/results/*.json
