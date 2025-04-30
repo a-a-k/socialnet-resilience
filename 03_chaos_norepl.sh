@@ -17,6 +17,7 @@
 #   results/norepl/summary.json  — mean R_live over all rounds
 # -------------------------------------------------------------------
 set -euo pipefail
+cd "$(dirname "$0")/DeathStarBench/socialNetwork"
 
 # ─── Tunables (can also be overridden via env-vars) ─────────────────
 ROUNDS=${ROUNDS:-50}
