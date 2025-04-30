@@ -130,3 +130,18 @@ summary = {"rounds": len(vals), "R_live": statistics.mean(vals)}
 json.dump(summary, open(json_path, "w"), indent=2)
 print(f"*** Mean R_live over {summary['rounds']} rounds: {summary['R_live']:.4f}")
 PY
+
+# ─── also dump per-round stats to chaos_runs.json ─────────────────
+python - <<'PY' "$OUTDIR/metrics.csv" "$OUTDIR/chaos_runs.json"
+import csv, json, sys
+csv_path, json_path = sys.argv[1:]
+
+rows = []
+with open(csv_path) as f:
+    next(f)                               # skip header
+    for round_, total, errors in csv.reader(f):
+        rows.append(
+            {"round": int(round_), "total": int(total), "errors": int(errors)}
+        )
+json.dump(rows, open(json_path, "w"), indent=2)
+PY
