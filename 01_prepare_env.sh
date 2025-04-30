@@ -37,6 +37,7 @@ fi
 cp ../../00_helpers/just_kill.sh 00_helpers/
 cp ../../resilience.py          .
 cp "$REPO_ROOT/overrides/socialnetwork-jaeger.override.yml" ./docker-compose.override.yml
+cp ../../00_helpers/mixed-workload-5xx.lua wrk2/scripts/social-network/
 
 ### Build wrk2 load-generator
 
