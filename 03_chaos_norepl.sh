@@ -28,7 +28,7 @@ DURATION=${DURATION:-30} # seconds
 THREADS=${THREADS:-2}
 CONNS=${CONNS:-32}
 URL=${URL:-http://localhost:8080/index.html}
-LUA=${LUA:-wrk2/scripts/social-network/mixed-workload.lua}
+LUA=${LUA:-wrk2/scripts/social-network/mixed-workload-5xx.lua}
 
 OUTDIR=${OUTDIR:-results/norepl}
 mkdir -p "$OUTDIR"
@@ -51,9 +51,19 @@ run_wrk() {
   local total errors
   if grep -q 'requests in' "$logfile"; then
       total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
-      errors=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' "$logfile" \
-               | awk '{print $NF}')
-      errors=${errors:-0}
+      # ---- count only real availability failures -------------------------
+      # 1) number of HTTP 5xx responses the Lua script printed
+      local fivexx
+      fivexx=$(grep -Eo '5xx_responses:[[:space:]]*[0-9]+' "$logfile" \
+                 | awk '{print $NF}')
+      fivexx=${fivexx:-0}
+
+      # 2) sum of all socket-level errors (connect/read/write/timeout)
+      local sock
+      sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" \
+               | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
+
+      errors=$(( fivexx + sock ))
   else
       # wrk failed before producing stats (e.g., nginx-thrift was dead)
       total=$expected_total
