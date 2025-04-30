@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Kill a given fraction of running Social-Network containers.
-#   ./just_kill.sh 0.30   # ⇒ kill ≈30 % containers except the entrypoint one (nginx)
+#   ./just_kill.sh 0.30   # ⇒ kill ≈30 % containers
 set -euo pipefail
 ratio="${1:-0.30}"
 ids=$(docker ps --filter "name=socialnetwork" -q)
