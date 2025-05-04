@@ -19,13 +19,13 @@ wrk -t2 -c64 -d60s -R300 \
 # Kill chaos process if still running
 kill "$chaos_pid" 2>/dev/null || true
 
-# Extract metrics from log
+# Extract metrics from log (with defaults if not found)
 errors=$(grep -o 'Non-2xx or 3xx responses: [0-9]\+' "$wrk_log" | awk '{print $NF}' || echo "0")
 total=$(grep -o '[0-9]\+ requests in' "$wrk_log" | awk '{print $1}' || echo "0")
 
-# Create JSON result
-jq -n --argjson e "${errors:-0}" --argjson t "${total:-0}" \
-     '{stage:"chaos_repl", total:t, errors:e}' \
-     > results/live_repl.json
+# Create JSON result - FIXED VERSION
+jq -n --arg e "$errors" --arg t "$total" \
+  '{stage:"chaos_repl", total:($t | tonumber), errors:($e | tonumber)}' \
+  > results/live_repl.json
 
 echo "✅ chaos_repl done"
