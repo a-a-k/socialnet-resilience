@@ -4,7 +4,7 @@ bash 00_helpers/just_kill.sh 0.30 & chaos=$!
 
 wrk -t2 -c64 -d60s -R300 \
   -s scripts/social-network/mixed-workload.lua \
-  http://localhost:8080/index.html > wrk2.log 2>&1
+  http://localhost:8080/index.html > wrk_repl.log 2>&1
 kill $chaos || true
 
 errors=$(grep -o 'Non-2xx or 3xx responses: [0-9]\+' wrk_repl.log | awk '{print $NF}')
