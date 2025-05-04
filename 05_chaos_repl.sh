@@ -23,7 +23,7 @@ kill "$chaos_pid" 2>/dev/null || true
 errors=$(grep -o 'Non-2xx or 3xx responses: [0-9]\+' "$wrk_log" | awk '{print $NF}' || echo "0")
 total=$(grep -o '[0-9]\+ requests in' "$wrk_log" | awk '{print $1}' || echo "0")
 
-# Create JSON result - FIXED VERSION
+# Create JSON result
 jq -n --arg e "$errors" --arg t "$total" \
   '{stage:"chaos_repl", total:($t | tonumber), errors:($e | tonumber)}' \
   > results/live_repl.json
