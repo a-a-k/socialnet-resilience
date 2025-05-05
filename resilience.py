@@ -10,6 +10,7 @@ ap.add_argument("deps", help="Jaeger deps.json")
 ap.add_argument("-o", "--out", help="store result JSON here")
 ap.add_argument("--samples", type=int, default=50)
 ap.add_argument("--p_fail",  type=float, default=0.30)
+ap.add_argument('--repl', type=int, choices=[0,1], default=0)
 args = ap.parse_args()
 
 # ----- load graph ----------------------------------------------------------
@@ -30,7 +31,7 @@ replicas = {
 
 p_node = args.p_fail
 def node_alive(v):
-    k = replicas.get(v, 1)
+    k = replicas.get(v, 1) if args.repl else 1
     # survive if at least one replica survives
     return random.random() > p_node**k
 
