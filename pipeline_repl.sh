@@ -13,7 +13,7 @@ echo "✅  venv activated ($(python -V))"
 
 ./01_prepare_env.sh
 ./04_steady_repl.sh
-./chaos.sh
+./chaos.sh --repl
 
 jq -s '.' DeathStarBench/socialNetwork/results/*_repl.json \
           DeathStarBench/socialNetwork/results/04_meta.json \
