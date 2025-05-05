@@ -129,7 +129,7 @@ for round in $(seq 1 "$ROUNDS"); do
 
   # 4) full restart of the stack before the next round
   docker compose down -v
-  docker compose up -d $"SCALE_ARGS"
+  docker compose up -d "${SCALE_ARGS}"
 done
 
 # ─── Aggregate R_live ─────────────────────────────────────────────────────
