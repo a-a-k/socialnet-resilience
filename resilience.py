@@ -4,11 +4,14 @@ Compute R_avg for the Social-Network graph in deps.json.
 Path of interest: nginx-web-server → post-storage-service.
 """
 import json, random, numpy as np, networkx as nx, argparse, sys
+# ---------------- deterministic RNG ----------------
+_FIXED_SEED = 16
+random.seed(_FIXED_SEED)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("deps", help="Jaeger deps.json")
 ap.add_argument("-o", "--out", help="store result JSON here")
-ap.add_argument("--samples", type=int, default=50)
+ap.add_argument("--samples", type=int, default=30)
 ap.add_argument("--p_fail",  type=float, default=0.30)
 ap.add_argument('--repl', type=int, choices=[0,1], default=0)
 args = ap.parse_args()
