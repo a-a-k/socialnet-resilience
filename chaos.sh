@@ -21,22 +21,24 @@ cd "$(dirname "$0")/DeathStarBench/socialNetwork"
 ROUNDS=${ROUNDS:-30}
 FAIL_FRACTION=${FAIL_FRACTION:-0.30}     # share of containers to kill
 SEED=${SEED:-16}                         # diff: new – deterministic RNG
-
-# number of replicas for the “replicated” scenario
-SCALE_ARGS=${SCALE_ARGS:-"--scale compose-post-service=3 \
-                          --scale home-timeline-service=3 \
-                          --scale user-timeline-service=3 \
-                          --scale text-service=3 \
-                          --scale media-service=3"}
-                          
 RATE=${RATE:-300}
 DURATION=${DURATION:-30}
 THREADS=${THREADS:-2}
 CONNS=${CONNS:-32}
 URL=${URL:-http://localhost:8080/index.html}
 LUA=${LUA:-wrk2/scripts/social-network/mixed-workload.lua}
-
 OUTDIR=${OUTDIR:-results/run_$(date +%Y%m%d-%H%M%S)}   # diff: generic folder
+SCALE_ARGS=""
+# number of replicas for the “replicated” scenario
+if [[ ${1:-} == "--repl" || ${1:-} == "-r" ]]; then
+  SCALE_ARGS="--scale compose-post-service=3 \
+                            --scale home-timeline-service=3 \
+                            --scale user-timeline-service=3 \
+                            --scale text-service=3 \
+                            --scale media-service=3"
+  shift
+fi
+                          
 mkdir -p "$OUTDIR"
 echo "round,total,errors" >"$OUTDIR/metrics.csv"
 
