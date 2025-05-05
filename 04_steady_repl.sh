@@ -27,6 +27,6 @@ echo "graph ..."
 ts=$(($(date +%s%N)/1000000))
 curl -s "http://localhost:16686/api/dependencies?endTs=$ts&lookback=3600000" \
      -o deps.json
-python3 resilience.py deps.json -o results/R_avg_repl.json
+python3 resilience.py deps.json -o results/R_avg_repl.json --repl 1
 jq -n '{"stage":"steady_repl"}' > results/04_meta.json
 echo "✅ steady_repl done"
