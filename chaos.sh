@@ -27,8 +27,8 @@ THREADS=${THREADS:-2}
 CONNS=${CONNS:-32}
 URL=${URL:-http://localhost:8080/index.html}
 LUA=${LUA:-wrk2/scripts/social-network/mixed-workload.lua}
-OUTDIR=${OUTDIR:-results/run_$(date +%Y%m%d-%H%M%S)}   # diff: generic folder
 SCALE_ARGS=""
+MODE="norepl"
 # number of replicas for the “replicated” scenario
 if [[ ${1:-} == "--repl" || ${1:-} == "-r" ]]; then
   SCALE_ARGS="--scale compose-post-service=3 \
@@ -36,11 +36,12 @@ if [[ ${1:-} == "--repl" || ${1:-} == "-r" ]]; then
                             --scale user-timeline-service=3 \
                             --scale text-service=3 \
                             --scale media-service=3"
+  MODE="repl"
   shift
 fi
-                          
+
+OUTDIR=${OUTDIR:-results/${MODE}}   # diff: generic folder
 mkdir -p "$OUTDIR"
-echo "round,total,errors" >"$OUTDIR/metrics.csv"
 
 # ─── Helper: wait until the frontend is reachable (or give up after 60 s) ─
 wait_ready() {
@@ -113,6 +114,10 @@ PY
 
 echo "=== Chaos test ($ROUNDS rounds, fail=$FAIL_FRACTION, seed=$SEED) ==="
 
+rounds=0
+total_sum=0
+error_sum=0
+
 for round in $(seq 1 "$ROUNDS"); do
   echo "-- round $round/$ROUNDS --"
   
@@ -125,7 +130,10 @@ for round in $(seq 1 "$ROUNDS"); do
   # 3) apply load
   logfile="$OUTDIR/wrk_${round}.log"
   read total errors < <(run_wrk "$logfile")
-  echo "$round,$total,$errors" >>"$OUTDIR/metrics.csv"
+
+  ((rounds++))
+  ((total_sum+=total))
+  ((error_sum+=errors))
 
   # 4) full restart of the stack before the next round
   docker compose down -v
@@ -133,27 +141,10 @@ for round in $(seq 1 "$ROUNDS"); do
 done
 
 # ─── Aggregate R_live ─────────────────────────────────────────────────────
-python - <<'PY' "$OUTDIR/metrics.csv" "$OUTDIR/summary.json"
-import csv, json, statistics, sys
-csv_path, json_path = sys.argv[1:]
-vals = []
-with open(csv_path) as f:
-    next(f)
-    for _, total, errors in csv.reader(f):
-        t, e = int(total), int(errors)
-        vals.append(1.0 - e / t if t else 0.0)
-json.dump({"rounds": len(vals), "R_live": statistics.mean(vals)}, open(json_path, "w"), indent=2)
-print(f"*** Mean R_live over {len(vals)} rounds: {statistics.mean(vals):.4f}")
-PY
-
-# ─── Dump per-round stats to chaos_runs.json ──────────────────────────────
-python - <<'PY' "$OUTDIR/metrics.csv" "$OUTDIR/chaos_runs.json"
-import csv, json, sys
-csv_path, json_path = sys.argv[1:]
-rows = []
-with open(csv_path) as f:
-    next(f)
-    for r, total, errors in csv.reader(f):
-        rows.append({"round": int(r), "total": int(total), "errors": int(errors)})
-json.dump(rows, open(json_path, "w"), indent=2)
+python - <<'PY' "$rounds" "$error_sum" "$total_sum" "$OUTDIR/summary.json"
+import json, sys
+r, err, tot, path = map(int, sys.argv[1:4]) + [sys.argv[4]]
+R = 0.0 if tot == 0 else 1.0 - err / tot
+json.dump({"rounds": r, "R_live": R}, open(path, "w"), indent=2)
+print(f"*** Mean R_live over {r} rounds: {R:.4f}")
 PY

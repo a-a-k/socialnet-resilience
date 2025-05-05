@@ -13,11 +13,7 @@ echo "✅  venv activated ($(python -V))"
 
 ./01_prepare_env.sh
 ./02_steady_norepl.sh
-OUTDIR=DeathStarBench/socialNetwork/results/norepl ./chaos.sh 
-
-jq -s '.' DeathStarBench/socialNetwork/results/*_base.json \
-          DeathStarBench/socialNetwork/results/02_meta.json \
-          DeathStarBench/socialNetwork/results/norepl/chaos_runs.json \
-        > DeathStarBench/socialNetwork/results/summary_norepl.json
+./chaos.sh
         
 echo "==> summary_norepl.json ready"
+cat DeathStarBench/socialNetwork/results/norepl/summary.json

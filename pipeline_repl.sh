@@ -15,8 +15,5 @@ echo "✅  venv activated ($(python -V))"
 ./04_steady_repl.sh
 ./chaos.sh --repl
 
-jq -s '.' DeathStarBench/socialNetwork/results/*_repl.json \
-          DeathStarBench/socialNetwork/results/04_meta.json \
-        > DeathStarBench/socialNetwork/results/summary_repl.json
-
 echo "==> summary_repl.json ready"
+cat DeathStarBench/socialNetwork/results/repl/summary.json
