@@ -84,19 +84,17 @@ random_kill() {
   (( total == 0 )) && { echo "No running containers!" >&2; return; }
 
   # diff: deterministic sample via python (respects SEED)
-  local py=$(cat <<'PY'
-import os, sys, random, math, json
-total  = int(sys.argv[1])
-frac   = float(sys.argv[2])
-seed   = int(os.environ.get("SEED", "16")) + int(sys.argv[3])  # vary per round
+  mapfile -t victims < <(python - "$FAIL_FRACTION" "$SEED" "$round" \
+      "${containers[@]}" <<'PY'
+import sys, random, math
+frac   = float(sys.argv[1])
+seed   = int(sys.argv[2]) + int(sys.argv[3])      # base-seed + round
+containers = sys.argv[4:]                         # remaining argv[]
 random.seed(seed)
-kill_cnt = max(1, math.ceil(total * frac))
-victims  = random.sample(sys.stdin.read().split(), k=kill_cnt)
-print('\n'.join(victims))
+kill_n = max(1, math.ceil(len(containers) * frac))
+print('\n'.join(random.sample(containers, k=kill_n)))
 PY
 )
-  mapfile -t victims < <(printf '%s\n' "${containers[@]}" \
-                         | python - "$total" "$fraction" "$round")
 
   printf '%s\n' "${victims[@]}" >"$OUTDIR/killed_${round}.txt"
 
