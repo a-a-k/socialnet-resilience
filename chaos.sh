@@ -59,18 +59,17 @@ run_wrk() {
   local total errors
   if grep -q 'requests in' "$logfile"; then
       total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
-      # ---- count only real availability failures -------------------------
-      # 1) number of HTTP 5xx responses the Lua script printed
-      local fivexx
-      fivexx=$(grep -Eo '5xx_responses:[[:space:]]*[0-9]+' "$logfile" \
-                 | awk '{print $NF}')
-      fivexx=${fivexx:-0}
+      # diff: count every non-2xx/3xx response that wrk prints natively
+      local bad
+      bad=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' "$logfile" \
+              | awk '{print $NF}')
+      bad=${bad:-0}
       # 2) sum of all socket-level errors (connect/read/write/timeout)
       local sock
       sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" \
                | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
 
-      errors=$(( fivexx + sock ))
+      errors=$(( bad + sock ))
   else
       # wrk failed before producing stats (e.g., nginx-thrift was dead)
       total=$expected_total
@@ -130,7 +129,7 @@ for round in $(seq 1 "$ROUNDS"); do
 
   # 4) full restart of the stack before the next round
   docker compose down -v
-  docker compose up -d
+  docker compose up -d $"SCALE_ARGS"
 done
 
 # ─── Aggregate R_live ─────────────────────────────────────────────────────
