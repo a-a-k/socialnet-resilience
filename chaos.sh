@@ -135,9 +135,9 @@ for round in $(seq 1 "$ROUNDS"); do
   read total errors < <(run_wrk "$logfile")
 
   echo "counting..."
-  ((rounds++))
-  ((total_sum+=total))
-  ((error_sum+=errors))
+  ((rounds++))  || true
+  ((total_sum+=total))  || true
+  ((error_sum+=errors))  || true
 
   # 4) full restart of the stack before the next round
   echo "restarting..."
