@@ -60,23 +60,22 @@ run_wrk() {
   local total errors
   if grep -q 'requests in' "$logfile"; then
       total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
-      # diff: count every non-2xx/3xx response that wrk prints natively
-      local bad
-      bad=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' "$logfile" \
-              | awk '{print $NF}')
-      bad=${bad:-0}
-      # 2) sum of all socket-level errors (connect/read/write/timeout)
+      # Only count 5xx responses
+      local five_xx
+      five_xx=$(grep -Eo 'HTTP/1.1" 5[0-9]{2}' "$logfile" | wc -l)
+      # Socket errors as before
       local sock
       sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" \
                | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
-
-      errors=$(( bad + sock ))
+      errors=$(( five_xx + sock ))
   else
       # wrk failed before producing stats (e.g., nginx-thrift was dead)
       total=$expected_total
       errors=$total
+      echo "[run_wrk] WARNING: wrk did not produce stats, assuming all requests failed"
   fi
-  echo "$total $errors"
+  # Always echo two numbers, even if both are zero
+  echo "${total:-$expected_total} ${errors:-$expected_total}"
 }
 
 # ─── Helper: kill a random subset of *business* containers ────────────────
@@ -103,9 +102,16 @@ random.seed(seed)
 kill_n = max(1, math.ceil(len(containers) * frac))
 print('\n'.join(random.sample(containers, k=kill_n)))
 PY
-)
+  )
 
   printf '%s\n' "${victims[@]}" >"$OUTDIR/killed_${round}.txt"
+
+  # Print human-friendly names for killed containers
+  echo "[Round $round] Killed containers (ID : Name):"
+  for id in "${victims[@]}"; do
+    name=$(docker ps -a --filter "id=$id" --format "{{.Names}}")
+    echo "$id : $name"
+  done
 
   # diff: disable auto-restart so that victims stay down for the whole round
   docker update --restart=no "${victims[@]}" || true
