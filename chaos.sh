@@ -121,28 +121,52 @@ error_sum=0
 for round in $(seq 1 "$ROUNDS"); do
   echo "-- round $round/$ROUNDS --"
   
-  # 1) make sure the stack is healthy after the last restart
-  echo "waiting..."
+  echo "[Round $round] waiting for stack to be healthy..."
   wait_ready
-  
-  # 2) inject chaos
-  echo "injecting..."
-  random_kill "$FAIL_FRACTION" "$round"
+  echo "[Round $round] stack is healthy."
 
-  # 3) apply load
-  echo "applying workload..."
+  echo "[Round $round] Running containers:"
+  docker ps
+  echo "[Round $round] Disk usage:"
+  df -h
+  echo "[Round $round] Memory usage:"
+  free -m
+
+  echo "[Round $round] injecting chaos..."
+  random_kill "$FAIL_FRACTION" "$round"
+  echo "[Round $round] chaos injected."
+
+  echo "[Round $round] applying workload..."
   logfile="$OUTDIR/wrk_${round}.log"
-  read total errors < <(run_wrk "$logfile")
+  if ! read total errors < <(run_wrk "$logfile"); then
+      echo "[Round $round] ERROR: run_wrk failed (exit code $?)"
+      exit 1
+  fi
+  echo "[Round $round] workload applied. Total: $total, Errors: $errors"
+
+  echo "[Round $round] restarting stack..."
+  if ! docker compose down -v; then
+      echo "[Round $round] ERROR: docker compose down failed"
+      exit 1
+  fi
+  if ! docker compose up -d ${SCALE_ARGS}; then
+      echo "[Round $round] ERROR: docker compose up failed"
+      exit 1
+  fi
+  echo "[Round $round] stack restarted."
+
+  echo "[Round $round] Exited containers:"
+  docker ps -a --filter "status=exited"
 
   echo "counting..."
   ((rounds++))  || true
   ((total_sum+=total))  || true
   ((error_sum+=errors))  || true
 
-  # 4) full restart of the stack before the next round
-  echo "restarting..."
-  docker compose down -v
-  docker compose up -d ${SCALE_ARGS}
+  if [ "$round" -eq 47 ]; then
+      echo "[Round $round] Capturing logs from all containers..."
+      docker compose logs > "$OUTDIR/docker_logs_round_${round}.txt"
+  fi
 done
 
 echo "done, aggregating results..."
