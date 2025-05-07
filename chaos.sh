@@ -122,28 +122,34 @@ for round in $(seq 1 "$ROUNDS"); do
   echo "-- round $round/$ROUNDS --"
   
   # 1) make sure the stack is healthy after the last restart
+  echo "waiting..."
   wait_ready
   
   # 2) inject chaos
+  echo "injecting..."
   random_kill "$FAIL_FRACTION" "$round"
 
   # 3) apply load
+  echo "applying workload..."
   logfile="$OUTDIR/wrk_${round}.log"
   read total errors < <(run_wrk "$logfile")
 
+  echo "counting..."
   ((rounds++))
   ((total_sum+=total))
   ((error_sum+=errors))
 
   # 4) full restart of the stack before the next round
+  echo "restarting..."
   docker compose down -v
   docker compose up -d ${SCALE_ARGS}
 done
 
+echo "done, aggregating results..."
 # ─── Aggregate R_live ─────────────────────────────────────────────────────
 python - <<'PY' "$rounds" "$error_sum" "$total_sum" "$OUTDIR/summary.json"
 import json, sys
-r, err, tot, path = map(int, sys.argv[1:4]) + [sys.argv[4]]
+r, err, tot, path = list(map(int, sys.argv[1:4])) + [sys.argv[4]]
 R = 0.0 if tot == 0 else 1.0 - err / tot
 json.dump({"rounds": r, "R_live": R}, open(path, "w"), indent=2)
 print(f"*** Mean R_live over {r} rounds: {R:.4f}")
