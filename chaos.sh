@@ -29,7 +29,7 @@ URL=${URL:-http://localhost:8080/index.html}
 LUA=${LUA:-wrk2/scripts/social-network/mixed-workload.lua}
 SCALE_ARGS=""
 MODE="norepl"
-# number of replicas for the “replicated” scenario
+# number of replicas for the "replicated" scenario
 if [[ ${1:-} == "--repl" || ${1:-} == "-r" ]]; then
   SCALE_ARGS="--scale compose-post-service=3 \
                             --scale home-timeline-service=3 \
@@ -154,3 +154,25 @@ R = 0.0 if tot == 0 else 1.0 - err / tot
 json.dump({"rounds": r, "R_live": R}, open(path, "w"), indent=2)
 print(f"*** Mean R_live over {r} rounds: {R:.4f}")
 PY
+
+total_requests=0
+total_errors=0
+
+for log in results/*/wrk_*.log; do
+    # Get total requests (from wrk summary)
+    reqs=$(grep -Eo '[0-9]+ requests in' "$log" | awk '{print $1}')
+    total_requests=$(( total_requests + reqs ))
+
+    # Count 5xx
+    five_xx=$(grep -Eo 'HTTP/1.1\" 5[0-9]{2}' "$log" | wc -l)
+
+    # Count socket errors
+    sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$log" \
+             | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
+
+    total_errors=$(( total_errors + five_xx + sock ))
+done
+
+echo "Total requests: $total_requests"
+echo "Total errors (5xx + socket): $total_errors"
+echo "R_live = $(awk "BEGIN {print 1 - $total_errors / $total_requests}")"
