@@ -140,6 +140,9 @@ for round in $(seq 1 "$ROUNDS"); do
   logfile="$OUTDIR/wrk_${round}.log"
   if ! read total errors < <(run_wrk "$logfile"); then
       echo "[Round $round] ERROR: run_wrk failed (exit code $?)"
+      echo "[Round $round] --- wrk log tail ---"
+      tail -40 "$logfile"
+      echo "[Round $round] --- end wrk log ---"
       exit 1
   fi
   echo "[Round $round] workload applied. Total: $total, Errors: $errors"
