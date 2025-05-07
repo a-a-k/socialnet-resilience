@@ -2,7 +2,7 @@
 
 echo "compose ..."
 set -euo pipefail; cd DeathStarBench/socialNetwork
-mkdir results/norepl
+mkdir -p results/norepl
 
 docker compose down
 docker compose up -d

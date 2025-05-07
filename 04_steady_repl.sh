@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+
+echo "compose ..."
 set -euo pipefail; cd DeathStarBench/socialNetwork
-mkdir results/repl
+mkdir -p results/repl
 
 docker compose up -d \
   --scale compose-post-service=3 \
