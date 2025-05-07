@@ -43,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: replicated-resilience-results
-          path: DeathStarBench/socialNetwork/results/*.json
+          path: DeathStarBench/socialNetwork/results/repl/*.json
