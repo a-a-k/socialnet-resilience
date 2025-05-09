@@ -144,7 +144,8 @@ for round in $(seq 1 "$ROUNDS"); do
 
   echo "[Round $round] applying workload..."
   logfile="$OUTDIR/wrk_${round}.log"
-  if read total errors < <(run_wrk "$logfile"); then
+  read total errors <<< "$(run_wrk "$logfile")"
+  if [[ $? -eq 0 ]]; then
       if [[ "$total" =~ ^[0-9]+$ ]] && [[ "$errors" =~ ^[0-9]+$ ]]; then
           echo "[Round $round] workload applied. Total: $total, Errors: $errors"
           echo "[Round $round] Status code summary:"
