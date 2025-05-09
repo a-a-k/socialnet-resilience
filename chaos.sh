@@ -67,9 +67,9 @@ run_wrk() {
                | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
       errors=$(( five_xx + sock ))
       # Print status code summary to stderr (so it doesn't interfere with read)
-      echo "[Round $round] Status code summary:" >&2
-      grep '^Status ' "$logfile" | sort >&2
-      echo "[Round $round] 5xx errors: $five_xx, socket errors: $sock, total errors: $errors" >&2
+      # echo "[Round $round] Status code summary:" >&2
+      # grep '^Status ' "$logfile" | sort >&2
+      # echo "[Round $round] 5xx errors: $five_xx, socket errors: $sock, total errors: $errors" >&2
   else
       total=$expected_total
       errors=$total
@@ -145,14 +145,25 @@ for round in $(seq 1 "$ROUNDS"); do
 
   echo "[Round $round] applying workload..."
   logfile="$OUTDIR/wrk_${round}.log"
-  if ! read total errors < <(run_wrk "$logfile"); then
-      echo "[Round $round] ERROR: run_wrk failed (exit code $?)"
+  if read total errors < <(run_wrk "$logfile"); then
+      if [[ "$total" =~ ^[0-9]+$ ]] && [[ "$errors" =~ ^[0-9]+$ ]]; then
+          echo "[Round $round] workload applied. Total: $total, Errors: $errors"
+          echo "[Round $round] Status code summary:"
+          grep '^Status ' "$logfile" | sort
+      else
+          echo "[Round $round] ERROR: run_wrk did not return valid numbers: total='$total', errors='$errors'"
+          echo "[Round $round] --- wrk log tail ---"
+          tail -40 "$logfile"
+          echo "[Round $round] --- end wrk log ---"
+          exit 1
+      fi
+  else
+      echo "[Round $round] ERROR: run_wrk failed (read/process substitution error)"
       echo "[Round $round] --- wrk log tail ---"
       tail -40 "$logfile"
       echo "[Round $round] --- end wrk log ---"
       exit 1
   fi
-  echo "[Round $round] workload applied. Total: $total, Errors: $errors"
 
   echo "[Round $round] restarting stack..."
   if ! docker compose down -v; then
