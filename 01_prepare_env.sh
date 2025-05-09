@@ -16,8 +16,12 @@ mkdir -p 00_helpers
 
 ### System packages (Ubuntu)
 sudo apt-get update -qq
-sudo apt-get install -y jq bc git python3-venv lua-socket luarocks python3-scipy
+sudo apt-get install -y jq bc git python3-venv lua-socket luarocks python3-scipy python3-pip
 sudo luarocks install luasocket
+
+# Use pip to ensure Python packages are available for the default python3
+sudo python3 -m pip install --upgrade pip
+sudo python3 -m pip install numpy networkx scipy
 
 if ! command -v docker >/dev/null; then
   echo "[bootstrap] Installing Docker CE…"
