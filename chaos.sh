@@ -57,28 +57,25 @@ run_wrk() {
   wrk -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
       -s "$LUA" "$URL" >"$logfile" 2>&1 || true     # ignore RC
 
-  local total errors
+  local total errors five_xx sock
   if grep -q 'requests in' "$logfile"; then
       total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
-      # Parse status code counts from wrk Lua output
       five_xx=$(grep -E '^Status 5[0-9]{2}:' "$logfile" | awk -F': ' '{sum += $2} END {print sum+0}')
       # If you want to include 4xx as errors, uncomment the next line:
       # four_xx=$(grep -E '^Status 4[0-9]{2}:' "$logfile" | awk -F': ' '{sum += $2} END {print sum+0}')
       sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" \
                | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
       errors=$(( five_xx + sock ))
+      # Print status code summary to stderr (so it doesn't interfere with read)
+      echo "[Round $round] Status code summary:" >&2
+      grep '^Status ' "$logfile" | sort >&2
+      echo "[Round $round] 5xx errors: $five_xx, socket errors: $sock, total errors: $errors" >&2
   else
-      # wrk failed before producing stats (e.g., nginx-thrift was dead)
       total=$expected_total
       errors=$total
-      echo "[run_wrk] WARNING: wrk did not produce stats, assuming all requests failed"
+      echo "[run_wrk] WARNING: wrk did not produce stats, assuming all requests failed" >&2
   fi
-  # Print status code summary to console
-  echo "[Round $round] Status code summary:"
-  grep '^Status ' "$logfile" | sort
-
-  echo "[Round $round] 5xx errors: $five_xx, socket errors: $sock, total errors: $errors"
-  # Always echo two numbers, even if both are zero
+  # Only output the two numbers for the main loop to read
   echo "${total:-$expected_total} ${errors:-$expected_total}"
 }
 
