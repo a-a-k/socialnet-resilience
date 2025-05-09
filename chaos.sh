@@ -26,7 +26,7 @@ DURATION=${DURATION:-30}
 THREADS=${THREADS:-2}
 CONNS=${CONNS:-32}
 URL=${URL:-http://localhost:8080/index.html}
-LUA=${LUA:-wrk2/scripts/social-network/mixed-workload.lua}
+LUA=${LUA:-wrk2/scripts/social-network/mixed-workload-5xx.lua}
 SCALE_ARGS=""
 MODE="norepl"
 # number of replicas for the "replicated" scenario
@@ -60,11 +60,10 @@ run_wrk() {
   local total errors
   if grep -q 'requests in' "$logfile"; then
       total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
-      # Only count 5xx responses
-      local five_xx
-      five_xx=$(grep -Eo 'HTTP/1.1" 5[0-9]{2}' "$logfile" | wc -l)
-      # Socket errors as before
-      local sock
+      # Parse status code counts from wrk Lua output
+      five_xx=$(grep -E '^Status 5[0-9]{2}:' "$logfile" | awk -F': ' '{sum += $2} END {print sum+0}')
+      # If you want to include 4xx as errors, uncomment the next line:
+      # four_xx=$(grep -E '^Status 4[0-9]{2}:' "$logfile" | awk -F': ' '{sum += $2} END {print sum+0}')
       sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" \
                | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
       errors=$(( five_xx + sock ))
@@ -74,6 +73,11 @@ run_wrk() {
       errors=$total
       echo "[run_wrk] WARNING: wrk did not produce stats, assuming all requests failed"
   fi
+  # Print status code summary to console
+  echo "[Round $round] Status code summary:"
+  grep '^Status ' "$logfile" | sort
+
+  echo "[Round $round] 5xx errors: $five_xx, socket errors: $sock, total errors: $errors"
   # Always echo two numbers, even if both are zero
   echo "${total:-$expected_total} ${errors:-$expected_total}"
 }
