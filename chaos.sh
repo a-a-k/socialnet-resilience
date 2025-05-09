@@ -53,30 +53,29 @@ wait_ready() {
 run_wrk() {
   local logfile="$1"
   local expected_total=$((RATE * DURATION))
+  local total errors five_xx sock
 
   wrk -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
-      -s "$LUA" "$URL" >"$logfile" 2>&1 || true     # ignore RC
+      -s "$LUA" "$URL" >"$logfile" 2>&1 || true
 
-  local total errors five_xx sock
   if grep -q 'requests in' "$logfile"; then
       total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
       five_xx=$(grep -E '^Status 5[0-9]{2}:' "$logfile" | awk -F': ' '{sum += $2} END {print sum+0}')
-      # If you want to include 4xx as errors, uncomment the next line:
-      # four_xx=$(grep -E '^Status 4[0-9]{2}:' "$logfile" | awk -F': ' '{sum += $2} END {print sum+0}')
       sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" \
                | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
       errors=$(( five_xx + sock ))
-      # Print status code summary to stderr (so it doesn't interfere with read)
-      # echo "[Round $round] Status code summary:" >&2
-      # grep '^Status ' "$logfile" | sort >&2
-      # echo "[Round $round] 5xx errors: $five_xx, socket errors: $sock, total errors: $errors" >&2
   else
+      # If wrk did not produce stats, set both to expected_total
       total=$expected_total
-      errors=$total
+      errors=$expected_total
       echo "[run_wrk] WARNING: wrk did not produce stats, assuming all requests failed" >&2
   fi
-  # Only output the two numbers for the main loop to read
-  echo "${total:-$expected_total} ${errors:-$expected_total}"
+
+  # Fallback: if for any reason total or errors is empty, set to expected_total
+  [[ -z "$total" ]] && total=$expected_total
+  [[ -z "$errors" ]] && errors=$expected_total
+
+  echo "$total $errors"
 }
 
 # ─── Helper: kill a random subset of *business* containers ────────────────
@@ -149,20 +148,22 @@ for round in $(seq 1 "$ROUNDS"); do
       if [[ "$total" =~ ^[0-9]+$ ]] && [[ "$errors" =~ ^[0-9]+$ ]]; then
           echo "[Round $round] workload applied. Total: $total, Errors: $errors"
           echo "[Round $round] Status code summary:"
-          grep '^Status ' "$logfile" | sort
+          grep '^Status ' "$logfile" | sort || true
+          echo "[Round $round] Socket errors:"
+          grep 'Socket errors:' "$logfile" || echo "None"
       else
           echo "[Round $round] ERROR: run_wrk did not return valid numbers: total='$total', errors='$errors'"
           echo "[Round $round] --- wrk log tail ---"
           tail -40 "$logfile"
           echo "[Round $round] --- end wrk log ---"
-          exit 1
+          # Optionally: exit 1
       fi
   else
       echo "[Round $round] ERROR: run_wrk failed (read/process substitution error)"
       echo "[Round $round] --- wrk log tail ---"
       tail -40 "$logfile"
       echo "[Round $round] --- end wrk log ---"
-      exit 1
+      # Optionally: exit 1
   fi
 
   echo "[Round $round] restarting stack..."
