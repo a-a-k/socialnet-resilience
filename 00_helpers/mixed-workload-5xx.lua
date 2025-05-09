@@ -134,4 +134,4 @@ function done(summary, latency, requests)
   for code, count in pairs(status_codes) do
     print("Status " .. code .. ": " .. count)
   end
-end 
+end

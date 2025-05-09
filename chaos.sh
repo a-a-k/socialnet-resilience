@@ -82,10 +82,11 @@ run_wrk() {
 random_kill() {
   local fraction="$1" ; local round="$2"
 
-  # diff: exclude monitoring/helper containers
+  # Exclude monitoring/helper containers by name
   mapfile -t containers < <(
-      docker compose ps -q \
-      | grep -vE '(jaeger|prometheus|grafana|wrkbench)'
+      docker compose ps --format '{{.ID}} {{.Name}}' \
+      | grep -vE '(jaeger|prometheus|grafana|wrkbench)' \
+      | awk '{print $1}'
   )
 
   local total=${#containers[@]}
@@ -222,4 +223,8 @@ done
 
 echo "Total requests: $total_requests"
 echo "Total errors (5xx + socket): $total_errors"
-echo "R_live = $(awk "BEGIN {print 1 - $total_errors / $total_requests}")"
+if [ "${total_requests:-0}" -gt 0 ]; then
+  echo "R_live = $(awk -v terr="$total_errors" -v treq="$total_requests" 'BEGIN {print 1 - terr / treq}')"
+else
+  echo "R_live = N/A (total_requests is 0)"
+fi

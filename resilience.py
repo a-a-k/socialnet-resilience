@@ -3,7 +3,8 @@
 Compute R_avg for the Social-Network graph in deps.json, mirroring the empirical workload.
 For each endpoint, check that all required services are reachable from nginx-web-server, and aggregate using the workload mix.
 """
-import json, random, numpy as np, networkx as nx, argparse
+import json, random, numpy as np, networkx as nx, argparse # type: ignore
+from scipy.stats import hypergeom # Add this import
 # ---------------- deterministic RNG ----------------
 _FIXED_SEED = 16
 random.seed(_FIXED_SEED)
@@ -19,7 +20,7 @@ args = ap.parse_args()
 # ----- load graph ----------------------------------------------------------
 E = json.load(open(args.deps))["data"]
 G = nx.DiGraph((e["parent"], e["child"]) for e in E)
-nodes = list(G)
+graph_nodes = list(G) # All services in the dependency graph
 
 # stateless services scaled to 3 replicas in replica-scenario
 replicas = {
@@ -30,10 +31,25 @@ replicas = {
     "media-service":            3,
 }
 
-p_node = args.p_fail
-def node_alive(v):
-    k = replicas.get(v, 1) if args.repl else 1
-    return random.random() > p_node**k
+# --- Calculate total application containers and number to kill ---
+# Assuming all nodes in G are potential application containers subject to chaos
+# Adjust this list if some services in G are excluded from chaos (like jaeger, etc.)
+application_service_names = [node for node in graph_nodes] # Or filter this list
+
+N_app_containers = 0
+for s_name in application_service_names:
+    if args.repl and s_name in replicas:
+        N_app_containers += replicas[s_name]
+    else:
+        N_app_containers += 1
+
+if N_app_containers == 0:
+    K_killed_containers = 0 # Avoid division by zero if no app containers
+else:
+    K_killed_containers = max(1, int(round(args.p_fail * N_app_containers)))
+    if K_killed_containers > N_app_containers: # Cannot kill more than exist
+        K_killed_containers = N_app_containers
+
 
 # --- Endpoint definitions and workload mix ---
 endpoints = {
@@ -60,12 +76,48 @@ client = "nginx-web-server"
 # --- Simulation ---
 results = {k: [] for k in endpoints}
 for _ in range(args.samples):
-    alive = {v for v in nodes if node_alive(v)}
-    G_alive = G.subgraph(alive)
+    alive_services_this_round = set()
+    if N_app_containers == 0 and K_killed_containers == 0: # Special case: no containers
+        alive_services_this_round.update(graph_nodes) # All services considered up
+    elif N_app_containers > 0 : # Proceed only if there are containers to analyze
+        for service_name in graph_nodes:
+            k_service_replicas = 1
+            if args.repl and service_name in replicas:
+                k_service_replicas = replicas[service_name]
+
+            service_is_alive = True # Assume alive initially
+            if K_killed_containers > 0: # Only apply killing logic if containers are actually killed
+                if k_service_replicas == 1:
+                    # Probability this single replica is killed
+                    p_killed_single = K_killed_containers / N_app_containers
+                    if random.random() < p_killed_single:
+                        service_is_alive = False
+                else: # k_service_replicas > 1
+                    # Probability all k_service_replicas are killed
+                    # hypergeom.pmf(x, M, n, N_draws)
+                    # x = k_service_replicas (all replicas of this service are killed)
+                    # M = N_app_containers (total app containers)
+                    # n = k_service_replicas (number of this service's replicas in the population)
+                    # N_draws = K_killed_containers (number of containers drawn/killed)
+                    if K_killed_containers < k_service_replicas:
+                        p_all_replicas_killed = 0.0 # Cannot kill all if K_killed < k_service_replicas
+                    else:
+                        try:
+                            p_all_replicas_killed = hypergeom.pmf(k_service_replicas, N_app_containers, k_service_replicas, K_killed_containers)
+                        except ValueError: # Can happen if params are inconsistent (e.g., N_app_containers too small)
+                            p_all_replicas_killed = 1.0 # Conservatively assume all killed if error
+                    
+                    if random.random() < p_all_replicas_killed:
+                        service_is_alive = False
+            
+            if service_is_alive:
+                alive_services_this_round.add(service_name)
+    
+    G_alive = G.subgraph(alive_services_this_round)
     for ep, info in endpoints.items():
         # For each endpoint, all targets must be reachable from client
         ok = all(
-            client in alive and t in alive and nx.has_path(G_alive, client, t)
+            client in alive_services_this_round and t in alive_services_this_round and nx.has_path(G_alive, client, t)
             for t in info["targets"]
         )
         results[ep].append(int(ok))
@@ -79,7 +131,7 @@ result = {
     "R_avg": round(R_avg, 3),
     "R_ep": {ep: round(R_ep[ep], 3) for ep in R_ep},
     "samples": args.samples,
-    "p_fail": p_node,
+    "p_fail": args.p_fail, # This now represents the fraction of containers targeted for killing
 }
 print(result)
 if args.out:
