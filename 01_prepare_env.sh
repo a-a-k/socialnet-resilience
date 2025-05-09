@@ -16,7 +16,7 @@ mkdir -p 00_helpers
 
 ### System packages (Ubuntu)
 sudo apt-get update -qq
-sudo apt-get install -y jq bc git python3-venv lua-socket luarocks
+sudo apt-get install -y jq bc git python3-venv lua-socket luarocks python3-scipy
 sudo luarocks install luasocket
 
 if ! command -v docker >/dev/null; then
