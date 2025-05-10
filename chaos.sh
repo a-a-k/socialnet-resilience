@@ -58,9 +58,9 @@ run_wrk() {
   wrk -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
       -s "$LUA" "$URL" >"$logfile" 2>&1 || true
 
-  echo "[run_wrk] --- Full contents of $logfile ---"
-  cat "$logfile"
-  echo "[run_wrk] --- End of $logfile ---"
+  echo "[run_wrk] --- Full contents of $logfile ---" >&2
+  cat "$logfile" >&2
+  echo "[run_wrk] --- End of $logfile ---" >&2
 
   
   if grep -q 'requests in' "$logfile"; then
@@ -72,15 +72,9 @@ run_wrk() {
   # Parse errors from our new Status Code Summary section
   errors=0
   
-  # Try to get the Total error responses line
-  if grep -q "Total error responses:" "$logfile"; then
-    errors=$(grep -Eo "Total error responses: [0-9]+" "$logfile" | awk '{print $NF}')
-  # Also try to get the Server Error count
-  elif grep -q "Server Error:" "$logfile"; then
-    errors=$(grep -Eo "Server Error: [0-9]+" "$logfile" | awk '{print $NF}')
-  # Also try the Non-2xx or 3xx responses line as fallback
-  elif grep -q "Non-2xx or 3xx responses:" "$logfile"; then
-    errors=$(grep -Eo "Non-2xx or 3xx responses: [0-9]+" "$logfile" | awk '{print $NF}')
+  # Try to get the Status 5xx line
+  if grep -qE "Status 5xx:[[:space:]]+" "$logfile"; then
+    errors=$(grep -E "Status 5xx:[[:space:]]+[0-9]+" "$logfile" | awk '{print $NF}')
   fi
   
   # Make sure both values are numeric
@@ -216,6 +210,7 @@ for round in $(seq 1 "$ROUNDS"); do
 done
 
 echo "done, aggregating results..."
+
 # ─── Aggregate R_live ─────────────────────────────────────────────────────
 python - <<'PY' "$rounds" "$error_sum" "$total_sum" "$OUTDIR/summary.json"
 import json, sys
