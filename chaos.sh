@@ -67,6 +67,9 @@ run_wrk() {
     total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
   else
     total=$expected_total
+    errors=$total
+    echo "$total $errors"
+    return
   fi
   
   # Parse errors from our new Status Code Summary section
@@ -87,7 +90,10 @@ run_wrk() {
     echo "[run_wrk] WARNING: Invalid errors value '$errors', using 0" >&2
     errors=0
   fi
-  
+
+  sock_errors=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
+  errors=$((errors + sock_errors))
+
   echo "$total $errors"
 }
 
