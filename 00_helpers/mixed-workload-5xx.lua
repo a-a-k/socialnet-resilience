@@ -1,3 +1,5 @@
+print(">>> [Lua] mixed-workload-5xx.lua loaded <<<")
+
 local socket = require("socket")
 local time = socket.gettime()*1000
 math.randomseed(time)
@@ -125,27 +127,30 @@ request = function()
 end
 
 -- Status code tracking logic
-status_codes = {}
-total_responses = 0
+threads = {}
 
-function response(status, headers, body)
-  status_codes[status] = (status_codes[status] or 0) + 1
-  total_responses = total_responses + 1
-  if total_responses % 1000 == 0 then
-    print("Progress: " .. total_responses .. " responses so far")
-  end
+setup = function(thread)
+  thread:set("status_codes", {})
+  table.insert(threads, thread)
 end
 
-function done(summary, latency, requests)
+response = function(status, headers, body)
+  local codes = thread:get("status_codes")
+  codes[status] = (codes[status] or 0) + 1
+  thread:set("status_codes", codes)
+end
+
+done = function(summary, latency, requests)
   print("=== Status Code Summary (wrk2 Lua) ===")
-  local any = false
-  for code, count in pairs(status_codes) do
+  local total_codes = {}
+  for i, thread in ipairs(threads) do
+    local codes = thread:get("status_codes")
+    for code, count in pairs(codes) do
+      total_codes[code] = (total_codes[code] or 0) + count
+    end
+  end
+  for code, count in pairs(total_codes) do
     print("Status " .. code .. ": " .. count)
-    any = true
   end
-  if not any then
-    print("WARNING: No status codes recorded by Lua script!")
-  end
-  print("Total responses seen by Lua: " .. total_responses)
   print("=== End Status Code Summary ===")
 end
