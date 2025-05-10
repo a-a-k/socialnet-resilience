@@ -88,6 +88,8 @@ random_kill() {
       | grep -vE '(jaeger|prometheus|grafana|wrkbench)' \
       | awk '{print $1}'
   )
+  echo "[Debug][Round $round] Initial container IDs for victim selection (total ${#containers[@]}):"
+  printf '%s\n' "${containers[@]}" | sort | uniq -c
 
   local total=${#containers[@]}
   (( total == 0 )) && { echo "No running containers!" >&2; return; }
@@ -104,6 +106,12 @@ kill_n = max(1, math.ceil(len(containers) * frac))
 print('\n'.join(random.sample(containers, k=kill_n)))
 PY
   )
+
+  echo "[Debug][Round $round] Victim IDs selected by Python (total ${#victims[@]}):"
+  printf '%s\n' "${victims[@]}" | sort | uniq -c
+
+  local killed_count=0
+  local target_kill_count=${#victims[@]}
 
   printf '%s\n' "${victims[@]}" >"$OUTDIR/killed_${round}.txt"
 
@@ -203,28 +211,6 @@ json.dump({"rounds": r, "R_live": R}, open(path, "w"), indent=2)
 print(f"*** Mean R_live over {r} rounds: {R:.4f}")
 PY
 
-total_requests=0
-total_errors=0
-
-for log in results/*/wrk_*.log; do
-    # Get total requests (from wrk summary)
-    reqs=$(grep -Eo '[0-9]+ requests in' "$log" | awk '{print $1}')
-    total_requests=$(( total_requests + reqs ))
-
-    # Count 5xx
-    five_xx=$(grep -Eo 'HTTP/1.1\" 5[0-9]{2}' "$log" | wc -l)
-
-    # Count socket errors
-    sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$log" \
-             | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
-
-    total_errors=$(( total_errors + five_xx + sock ))
-done
-
-echo "Total requests: $total_requests"
-echo "Total errors (5xx + socket): $total_errors"
-if [ "${total_requests:-0}" -gt 0 ]; then
-  echo "R_live = $(awk -v terr="$total_errors" -v treq="$total_requests" 'BEGIN {print 1 - terr / treq}')"
-else
-  echo "R_live = N/A (total_requests is 0)"
-fi
+echo "done. Results written to $OUTDIR/summary.json"
+cat "$OUTDIR/summary.json"
+exit 0

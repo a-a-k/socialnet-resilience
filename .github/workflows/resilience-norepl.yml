@@ -53,4 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baseline-resilience-results
-          path: DeathStarBench/socialNetwork/results/norepl/*.json
+          path: |
+            DeathStarBench/socialNetwork/results/norepl/*.json
+            DeathStarBench/socialNetwork/results/repl/wrk_*.log
+            DeathStarBench/socialNetwork/results/repl/status_codes_*.txt

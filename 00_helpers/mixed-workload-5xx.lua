@@ -126,12 +126,26 @@ end
 
 -- Status code tracking logic
 status_codes = {}
+total_responses = 0
+
 function response(status, headers, body)
   status_codes[status] = (status_codes[status] or 0) + 1
+  total_responses = total_responses + 1
+  if total_responses % 1000 == 0 then
+    print("Progress: " .. total_responses .. " responses so far")
+  end
 end
 
 function done(summary, latency, requests)
+  print("=== Status Code Summary (wrk2 Lua) ===")
+  local any = false
   for code, count in pairs(status_codes) do
     print("Status " .. code .. ": " .. count)
+    any = true
   end
+  if not any then
+    print("WARNING: No status codes recorded by Lua script!")
+  end
+  print("Total responses seen by Lua: " .. total_responses)
+  print("=== End Status Code Summary ===")
 end

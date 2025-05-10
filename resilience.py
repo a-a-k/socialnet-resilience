@@ -4,7 +4,7 @@ Compute R_avg for the Social-Network graph in deps.json, mirroring the empirical
 For each endpoint, check that all required services are reachable from nginx-web-server, and aggregate using the workload mix.
 """
 import json, random, numpy as np, networkx as nx, argparse # type: ignore
-from scipy.stats import hypergeom # Add this import
+from scipy.stats import hypergeom # type: ignore # Add this import
 # ---------------- deterministic RNG ----------------
 _FIXED_SEED = 16
 random.seed(_FIXED_SEED)
