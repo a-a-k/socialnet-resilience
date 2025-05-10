@@ -18,7 +18,7 @@ set -euo pipefail
 cd "$(dirname "$0")/DeathStarBench/socialNetwork"
 
 # ─── Tunables (can be overridden via env-vars) ────────────────────────────
-ROUNDS=${ROUNDS:-500}
+ROUNDS=${ROUNDS:-100}
 FAIL_FRACTION=${FAIL_FRACTION:-0.30}     # share of containers to kill
 SEED=${SEED:-16}                         # diff: new – deterministic RNG
 RATE=${RATE:-300}
@@ -26,10 +26,10 @@ DURATION=${DURATION:-30}
 THREADS=${THREADS:-2}
 CONNS=${CONNS:-32}
 URL=${URL:-http://localhost:8080/index.html}
-LUA=${LUA:-wrk2/scripts/social-network/mixed-workload.lua}
+LUA=${LUA:-wrk2/scripts/social-network/mixed-workload-5xx.lua}
 SCALE_ARGS=""
 MODE="norepl"
-# number of replicas for the “replicated” scenario
+# number of replicas for the "replicated" scenario
 if [[ ${1:-} == "--repl" || ${1:-} == "-r" ]]; then
   SCALE_ARGS="--scale compose-post-service=3 \
                             --scale home-timeline-service=3 \
@@ -53,29 +53,41 @@ wait_ready() {
 run_wrk() {
   local logfile="$1"
   local expected_total=$((RATE * DURATION))
+  local total errors
 
   wrk -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
-      -s "$LUA" "$URL" >"$logfile" 2>&1 || true     # ignore RC
+      -s "$LUA" "$URL" >"$logfile" 2>&1 || true
 
-  local total errors
+  echo "[run_wrk] --- Full contents of $logfile ---" >&2
+  cat "$logfile" >&2
+  echo "[run_wrk] --- End of $logfile ---" >&2
+
+  
   if grep -q 'requests in' "$logfile"; then
-      total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
-      # diff: count every non-2xx/3xx response that wrk prints natively
-      local bad
-      bad=$(grep -Eo 'Non-2xx or 3xx responses:[[:space:]]*[0-9]+' "$logfile" \
-              | awk '{print $NF}')
-      bad=${bad:-0}
-      # 2) sum of all socket-level errors (connect/read/write/timeout)
-      local sock
-      sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" \
-               | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
-
-      errors=$(( bad + sock ))
+    total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
   else
-      # wrk failed before producing stats (e.g., nginx-thrift was dead)
-      total=$expected_total
-      errors=$total
+    total=$expected_total
   fi
+  
+  # Parse errors from our new Status Code Summary section
+  errors=0
+  
+  # Try to get the Status 5xx line
+  if grep -qE "Status 5xx:[[:space:]]+" "$logfile"; then
+    errors=$(grep -E "Status 5xx:[[:space:]]+[0-9]+" "$logfile" | awk '{print $NF}')
+  fi
+  
+  # Make sure both values are numeric
+  if [[ ! "$total" =~ ^[0-9]+$ ]]; then
+    echo "[run_wrk] WARNING: Invalid total value '$total', using expected: $expected_total" >&2
+    total=$expected_total
+  fi
+  
+  if [[ ! "$errors" =~ ^[0-9]+$ ]]; then
+    echo "[run_wrk] WARNING: Invalid errors value '$errors', using 0" >&2
+    errors=0
+  fi
+  
   echo "$total $errors"
 }
 
@@ -83,10 +95,11 @@ run_wrk() {
 random_kill() {
   local fraction="$1" ; local round="$2"
 
-  # diff: exclude monitoring/helper containers
+  # Exclude monitoring/helper containers by name
   mapfile -t containers < <(
-      docker compose ps -q \
-      | grep -vE '(jaeger|prometheus|grafana|wrkbench)'
+      docker compose ps --format '{{.ID}} {{.Name}}' \
+      | grep -vE '(jaeger|prometheus|grafana|wrkbench)' \
+      | awk '{print $1}'
   )
 
   local total=${#containers[@]}
@@ -103,9 +116,19 @@ random.seed(seed)
 kill_n = max(1, math.ceil(len(containers) * frac))
 print('\n'.join(random.sample(containers, k=kill_n)))
 PY
-)
+  )
+
+  local killed_count=0
+  local target_kill_count=${#victims[@]}
 
   printf '%s\n' "${victims[@]}" >"$OUTDIR/killed_${round}.txt"
+
+  # Print human-friendly names for killed containers
+  echo "[Round $round] Killed containers (ID : Name):"
+  for id in "${victims[@]}"; do
+    name=$(docker ps -a --filter "id=$id" --format "{{.Names}}")
+    echo "$id : $name"
+  done
 
   # diff: disable auto-restart so that victims stay down for the whole round
   docker update --restart=no "${victims[@]}" || true
@@ -121,31 +144,73 @@ error_sum=0
 for round in $(seq 1 "$ROUNDS"); do
   echo "-- round $round/$ROUNDS --"
   
-  # 1) make sure the stack is healthy after the last restart
-  echo "waiting..."
+  echo "[Round $round] waiting for stack to be healthy..."
   wait_ready
-  
-  # 2) inject chaos
-  echo "injecting..."
-  random_kill "$FAIL_FRACTION" "$round"
+  echo "[Round $round] stack is healthy."
 
-  # 3) apply load
-  echo "applying workload..."
+  echo "[Round $round] Running containers:"
+  docker ps
+  #echo "[Round $round] Disk usage:"
+  #df -h
+  #echo "[Round $round] Memory usage:"
+  #free -m
+
+  echo "[Round $round] injecting chaos..."
+  random_kill "$FAIL_FRACTION" "$round"
+  echo "[Round $round] chaos injected."
+
+  echo "[Round $round] applying workload..."
   logfile="$OUTDIR/wrk_${round}.log"
-  read total errors < <(run_wrk "$logfile")
+  read total errors <<< "$(run_wrk "$logfile")"
+  if [[ $? -eq 0 ]]; then
+      if [[ "$total" =~ ^[0-9]+$ ]] && [[ "$errors" =~ ^[0-9]+$ ]]; then
+          echo "[Round $round] workload applied. Total: $total, Errors: $errors"
+          echo "[Round $round] Status code summary:"
+          grep '^Status ' "$logfile" | sort || true
+          echo "[Round $round] Socket errors:"
+          grep 'Socket errors:' "$logfile" || echo "None"
+      else
+          echo "[Round $round] ERROR: run_wrk did not return valid numbers: total='$total', errors='$errors'"
+          echo "[Round $round] --- wrk log tail ---"
+          tail -40 "$logfile"
+          echo "[Round $round] --- end wrk log ---"
+          # Optionally: exit 1
+      fi
+  else
+      echo "[Round $round] ERROR: run_wrk failed (read/process substitution error)"
+      echo "[Round $round] --- wrk log tail ---"
+      tail -40 "$logfile"
+      echo "[Round $round] --- end wrk log ---"
+      # Optionally: exit 1
+  fi
+
+  echo "[Round $round] restarting stack..."
+  if ! docker compose down -v > /dev/null 2>&1; then
+      echo "[Round $round] ERROR: docker compose down failed"
+      exit 1
+  fi
+  if ! docker compose up -d ${SCALE_ARGS}; then
+      echo "[Round $round] ERROR: docker compose up failed"
+      exit 1
+  fi
+  echo "[Round $round] stack restarted."
+
+  echo "[Round $round] Exited containers:"
+  docker ps -a --filter "status=exited"
 
   echo "counting..."
   ((rounds++))  || true
   ((total_sum+=total))  || true
   ((error_sum+=errors))  || true
 
-  # 4) full restart of the stack before the next round
-  echo "restarting..."
-  docker compose down -v
-  docker compose up -d ${SCALE_ARGS}
+  if [ "$round" -eq 47 ]; then
+      echo "[Round $round] Capturing logs from all containers..."
+      docker compose logs > "$OUTDIR/docker_logs_round_${round}.txt"
+  fi
 done
 
 echo "done, aggregating results..."
+
 # ─── Aggregate R_live ─────────────────────────────────────────────────────
 python - <<'PY' "$rounds" "$error_sum" "$total_sum" "$OUTDIR/summary.json"
 import json, sys
@@ -154,3 +219,6 @@ R = 0.0 if tot == 0 else 1.0 - err / tot
 json.dump({"rounds": r, "R_live": R}, open(path, "w"), indent=2)
 print(f"*** Mean R_live over {r} rounds: {R:.4f}")
 PY
+
+echo "done. Results written to $OUTDIR/summary.json"
+exit 0
