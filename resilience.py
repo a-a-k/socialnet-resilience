@@ -63,7 +63,7 @@ for svc, count in k_i_map.items():
 # --- Endpoint definitions and workload mix ---
 endpoints = {
     "home-timeline": {
-        "targets": ["home-timeline-service", "post-storage-service"],
+        "targets": ["home-timeline-service", "post-storage-service", "social-graph-service"],
         "weight": 0.6,
     },
     "user-timeline": {
@@ -71,8 +71,7 @@ endpoints = {
         "weight": 0.3,
     },
     "compose-post": {
-        # Static
-        "static_targets": [
+        "targets": [
             "compose-post-service",
             "unique-id-service",
             "text-service",
@@ -81,9 +80,6 @@ endpoints = {
             "user-timeline-service",
             "home-timeline-service",
             "social-graph-service",
-        ],
-        # Dynamic
-        "conditional_targets": [
             "media-service",
             "url-shorten-service",
             "user-mention-service",
