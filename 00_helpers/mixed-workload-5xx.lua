@@ -130,14 +130,16 @@ end
 threads = {}
 
 setup = function(thread)
+  -- Initialize a per-thread table for status codes
   thread:set("status_codes", {})
   table.insert(threads, thread)
 end
 
 response = function(status, headers, body)
-  local codes = thread:get("status_codes")
+  -- Access the current thread's status_codes table
+  local codes = wrk.thread:get("status_codes")
   codes[status] = (codes[status] or 0) + 1
-  thread:set("status_codes", codes)
+  wrk.thread:set("status_codes", codes)
 end
 
 done = function(summary, latency, requests)
