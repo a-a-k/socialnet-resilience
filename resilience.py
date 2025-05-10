@@ -36,9 +36,6 @@ replicas = {
     "user-timeline-service":    3,
     "text-service":             3,
     "media-service":            3,
-    # write services (for compose-post)
-    "write-home-timeline-service": 1,
-    "write-user-timeline-service": 1,
 }
 
 # --- Calculate total application containers and number to kill ---
@@ -74,14 +71,25 @@ endpoints = {
         "weight": 0.3,
     },
     "compose-post": {
-        # exclude media-service here; will include conditionally
-        "targets": [
-            "compose-post-service", "text-service", "user-service",
-            "unique-id-service", "post-storage-service",
-            "write-home-timeline-service", "write-user-timeline-service"
+        # Static
+        "static_targets": [
+            "compose-post-service",
+            "unique-id-service",
+            "text-service",
+            "user-service",
+            "post-storage-service",
+            "user-timeline-service",
+            "home-timeline-service",
+            "social-graph-service",
+        ],
+        # Dynamic
+        "conditional_targets": [
+            "media-service",
+            "url-shorten-service",
+            "user-mention-service",
         ],
         "weight": 0.1,
-    }
+    },
 }
 client = "nginx-web-server"
 
@@ -101,12 +109,17 @@ for _ in range(args.samples):
 
     # Evaluate each endpoint
     for ep, info in endpoints.items():
-        # Conditional inclusion for compose-post media-service
         targets = list(info["targets"])
         if ep == "compose-post":
-            # Simulate num_media = random.randint(0,4)
+            # simulate media usage: num_media in [0,4]
             if random.randint(0, 4) > 0:
                 targets.append("media-service")
+            # simulate URL inclusion: num_urls in [0,5]
+            if random.randint(0, 5) > 0:
+                targets.append("url-shorten-service")
+            # simulate mentions: num_user_mentions in [0,5]
+            if random.randint(0, 5) > 0:
+                targets.append("user-mention-service")
 
         # Check reachability for all required targets
         ok = all(
