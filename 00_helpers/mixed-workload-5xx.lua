@@ -13,6 +13,13 @@ local charset = {'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', 'a', 's',
 
 local decset = {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'}
 
+-- Counters for tracking status codes
+-- Use _G to ensure these are truly global
+_G.count_2xx = 0
+_G.count_4xx = 0 
+_G.count_5xx = 0
+_G.count_other = 0
+
 -- load env vars
 local max_user_index = tonumber(os.getenv("max_user_index")) or 962
 
@@ -126,22 +133,29 @@ request = function()
   end
 end
 
--- Global counter for status codes
-status_codes = {}
-
 setup = function(thread)
   -- Nothing to do
 end
 
 response = function(status, headers, body)
-  -- Count status codes
-  status_codes[status] = (status_codes[status] or 0) + 1
+  -- Categorize the status code
+  if status >= 200 and status < 300 then
+    _G.count_2xx = _G.count_2xx + 1
+  elseif status >= 400 and status < 500 then
+    _G.count_4xx = _G.count_4xx + 1
+  elseif status >= 500 and status < 600 then
+    _G.count_5xx = _G.count_5xx + 1
+  else
+    _G.count_other = _G.count_other + 1
+  end
 end
 
 done = function(summary, latency, requests)
   print("=== STATUS CODE SUMMARY ===")
-  for code, count in pairs(status_codes) do
-    print("Status " .. code .. ": " .. count)
-  end
+  print("Status 2xx (Success): " .. _G.count_2xx)
+  print("Status 4xx (Client Error): " .. _G.count_4xx)
+  print("Status 5xx (Server Error): " .. _G.count_5xx)
+  print("Other status: " .. _G.count_other) 
+  print("Total error responses: " .. (_G.count_4xx + _G.count_5xx + _G.count_other))
   print("=== END STATUS CODE SUMMARY ===")
 end

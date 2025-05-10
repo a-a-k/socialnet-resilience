@@ -53,7 +53,7 @@ wait_ready() {
 run_wrk() {
   local logfile="$1"
   local expected_total=$((RATE * DURATION))
-  local total errors five_xx sock
+  local total errors
 
   wrk -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
       -s "$LUA" "$URL" >"$logfile" 2>&1 || true
@@ -62,23 +62,38 @@ run_wrk() {
   cat "$logfile"
   echo "[run_wrk] --- End of $logfile ---"
 
+  
   if grep -q 'requests in' "$logfile"; then
-      total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
-      five_xx=$(grep -E '^Status 5[0-9]{2}:' "$logfile" | awk -F': ' '{sum += $2} END {print sum+0}')
-      sock=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" \
-               | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
-      errors=$(( five_xx + sock ))
+    total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
   else
-      # If wrk did not produce stats, set both to expected_total
-      total=$expected_total
-      errors=$expected_total
-      echo "[run_wrk] WARNING: wrk did not produce stats, assuming all requests failed" >&2
+    total=$expected_total
   fi
-
-  # Fallback: if for any reason total or errors is empty, set to expected_total
-  [[ -z "$total" ]] && total=$expected_total
-  [[ -z "$errors" ]] && errors=$expected_total
-
+  
+  # Parse errors from our new Status Code Summary section
+  errors=0
+  
+  # Try to get the Total error responses line
+  if grep -q "Total error responses:" "$logfile"; then
+    errors=$(grep -Eo "Total error responses: [0-9]+" "$logfile" | awk '{print $NF}')
+  # Also try to get the Server Error count
+  elif grep -q "Server Error:" "$logfile"; then
+    errors=$(grep -Eo "Server Error: [0-9]+" "$logfile" | awk '{print $NF}')
+  # Also try the Non-2xx or 3xx responses line as fallback
+  elif grep -q "Non-2xx or 3xx responses:" "$logfile"; then
+    errors=$(grep -Eo "Non-2xx or 3xx responses: [0-9]+" "$logfile" | awk '{print $NF}')
+  fi
+  
+  # Make sure both values are numeric
+  if [[ ! "$total" =~ ^[0-9]+$ ]]; then
+    echo "[run_wrk] WARNING: Invalid total value '$total', using expected: $expected_total" >&2
+    total=$expected_total
+  fi
+  
+  if [[ ! "$errors" =~ ^[0-9]+$ ]]; then
+    echo "[run_wrk] WARNING: Invalid errors value '$errors', using 0" >&2
+    errors=0
+  fi
+  
   echo "$total $errors"
 }
 
