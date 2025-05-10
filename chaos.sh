@@ -58,6 +58,10 @@ run_wrk() {
   wrk -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
       -s "$LUA" "$URL" >"$logfile" 2>&1 || true
 
+  echo "[run_wrk] --- Full contents of $logfile ---"
+  cat "$logfile"
+  echo "[run_wrk] --- End of $logfile ---"
+
   if grep -q 'requests in' "$logfile"; then
       total=$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')
       five_xx=$(grep -E '^Status 5[0-9]{2}:' "$logfile" | awk -F': ' '{sum += $2} END {print sum+0}')
@@ -88,8 +92,6 @@ random_kill() {
       | grep -vE '(jaeger|prometheus|grafana|wrkbench)' \
       | awk '{print $1}'
   )
-  echo "[Debug][Round $round] Initial container IDs for victim selection (total ${#containers[@]}):"
-  printf '%s\n' "${containers[@]}" | sort | uniq -c
 
   local total=${#containers[@]}
   (( total == 0 )) && { echo "No running containers!" >&2; return; }
@@ -106,9 +108,6 @@ kill_n = max(1, math.ceil(len(containers) * frac))
 print('\n'.join(random.sample(containers, k=kill_n)))
 PY
   )
-
-  echo "[Debug][Round $round] Victim IDs selected by Python (total ${#victims[@]}):"
-  printf '%s\n' "${victims[@]}" | sort | uniq -c
 
   local killed_count=0
   local target_kill_count=${#victims[@]}
@@ -142,10 +141,10 @@ for round in $(seq 1 "$ROUNDS"); do
 
   echo "[Round $round] Running containers:"
   docker ps
-  echo "[Round $round] Disk usage:"
-  df -h
-  echo "[Round $round] Memory usage:"
-  free -m
+  #echo "[Round $round] Disk usage:"
+  #df -h
+  #echo "[Round $round] Memory usage:"
+  #free -m
 
   echo "[Round $round] injecting chaos..."
   random_kill "$FAIL_FRACTION" "$round"
@@ -177,11 +176,11 @@ for round in $(seq 1 "$ROUNDS"); do
   fi
 
   echo "[Round $round] restarting stack..."
-  if ! docker compose down -v; then
+  if ! docker compose down -v > /dev/null 2>&1; then
       echo "[Round $round] ERROR: docker compose down failed"
       exit 1
   fi
-  if ! docker compose up -d ${SCALE_ARGS}; then
+  if ! docker compose up -d --quiet ${SCALE_ARGS}; then
       echo "[Round $round] ERROR: docker compose up failed"
       exit 1
   fi
@@ -212,5 +211,4 @@ print(f"*** Mean R_live over {r} rounds: {R:.4f}")
 PY
 
 echo "done. Results written to $OUTDIR/summary.json"
-cat "$OUTDIR/summary.json"
 exit 0

@@ -126,30 +126,66 @@ request = function()
   end
 end
 
--- Status code tracking logic
+-- This table will store references to all active thread objects.
+-- It needs to be global or accessible to the done() function.
 threads = {}
 
+-- This table will store the status code tables for each thread.
+-- We use the thread object itself as the key.
+local per_thread_status_data = {}
+
+-- setup() is called once for each thread.
+-- The 'thread' argument here is the userdata object for the current thread.
 setup = function(thread)
-  thread.status_codes = {}
+  -- Create a new, empty table to hold status codes for THIS thread.
+  -- Store it in our per_thread_status_data table, using the thread object as the key.
+  per_thread_status_data[thread] = {}
+
+  -- Add this thread object to our list of all threads.
+  -- This allows us to iterate over all threads in the done() function.
   table.insert(threads, thread)
 end
 
+-- response() is called for each HTTP response received.
 response = function(status, headers, body)
-  local codes = wrk.thread.status_codes
-  codes[status] = (codes[status] or 0) + 1
+  -- 'wrk.thread' is a reference to the current thread's userdata object.
+  -- We use it to look up this thread's dedicated status code table.
+  local current_thread_codes = per_thread_status_data[wrk.thread]
+
+  -- It's crucial that wrk.thread here is one of the thread objects
+  -- for which setup() was called.
+  if current_thread_codes then
+    current_thread_codes[status] = (current_thread_codes[status] or 0) + 1
+  else
+    -- This would indicate an issue, e.g., response() called for a thread
+    -- not seen in setup(). Should not typically happen.
+    print("PANIC: No status_codes table for current thread in response()!")
+  end
 end
 
+-- done() is called once after all requests are complete.
 done = function(summary, latency, requests)
   print("=== Status Code Summary (wrk2 Lua) ===")
-  local total_codes = {}
-  for i, thread in ipairs(threads) do
-    local codes = thread.status_codes
-    for code, count in pairs(codes) do
-      total_codes[code] = (total_codes[code] or 0) + count
+  local aggregated_codes = {}
+
+  -- Iterate through all the thread objects we stored earlier.
+  for _, thread_instance in ipairs(threads) do
+    -- Get the status code table for this specific thread_instance.
+    local thread_specific_codes = per_thread_status_data[thread_instance]
+    if thread_specific_codes then
+      for code, count in pairs(thread_specific_codes) do
+        aggregated_codes[code] = (aggregated_codes[code] or 0) + count
+      end
     end
   end
-  for code, count in pairs(total_codes) do
-    print("Status " .. code .. ": " .. count)
+
+  -- Print the final aggregated results.
+  if next(aggregated_codes) == nil then
+    print("No status codes were recorded.")
+  else
+    for code, count in pairs(aggregated_codes) do
+      print("Status " .. code .. ": " .. count)
+    end
   end
   print("=== End Status Code Summary ===")
 end
