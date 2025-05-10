@@ -126,31 +126,59 @@ request = function()
   end
 end
 
--- Create a SINGLE shared status table across all threads
-local status_codes = {}
+-- Simple direct coding - don't try complex thread handling
+-- Just use global variables
 
--- setup() is called once for each thread
+-- Global counter for responses
+status_codes = {}
+
+-- Print a message to show script is loaded properly
+print(">>> [Lua] Thread handler functions initialized...")
+
 setup = function(thread)
-  -- Nothing special to do here
-  thread:set("status_codes", status_codes)
+  -- Nothing to do in setup
+  print(">>> [Lua] Setup function called")
 end
 
--- response() is called for each HTTP response received
 response = function(status, headers, body)
-  -- Use the shared status codes table
+  -- Just count statuses in the global table
   status_codes[status] = (status_codes[status] or 0) + 1
 end
 
--- done() is called once after all requests are complete
 done = function(summary, latency, requests)
-  print("=== Status Code Summary (wrk2 Lua) ===")
+  -- Print raw data available to us
+  print("=== RAW WRK SUMMARY DATA ===")
+  for k, v in pairs(summary) do
+    print(string.format("summary.%s = %s", k, tostring(v)))
+  end
   
+  print("\n=== RAW LATENCY DATA ===")
+  if latency then
+    for k, v in pairs(latency) do
+      print(string.format("latency.%s = %s", k, tostring(v)))
+    end
+  else
+    print("No latency data available")
+  end
+  
+  print("\n=== RAW REQUESTS DATA ===")
+  if requests then
+    for k, v in pairs(requests) do
+      print(string.format("requests.%s = %s", k, tostring(v)))
+    end
+  else 
+    print("No requests data available")
+  end
+  
+  print("\n=== STATUS CODE SUMMARY ===")
   if next(status_codes) == nil then
-    print("No status codes were recorded.")
+    print("No status codes were recorded. Total requests according to summary: " .. 
+          (summary and summary.requests or "unknown"))
   else
     for code, count in pairs(status_codes) do
-      print("Status " .. code .. ": " .. count)
+      print(string.format("Status %d: %d", code, count))
     end
   end
-  print("=== End Status Code Summary ===")
-end 
+  
+  print("=== END WRK DATA ===")
+end
