@@ -130,23 +130,20 @@ end
 threads = {}
 
 setup = function(thread)
-  -- Initialize a per-thread table for status codes
-  thread:set("status_codes", {})
+  thread.status_codes = {}
   table.insert(threads, thread)
 end
 
 response = function(status, headers, body)
-  -- Access the current thread's status_codes table
-  local codes = wrk.thread:get("status_codes")
+  local codes = wrk.thread.status_codes
   codes[status] = (codes[status] or 0) + 1
-  wrk.thread:set("status_codes", codes)
 end
 
 done = function(summary, latency, requests)
   print("=== Status Code Summary (wrk2 Lua) ===")
   local total_codes = {}
   for i, thread in ipairs(threads) do
-    local codes = thread:get("status_codes")
+    local codes = thread.status_codes
     for code, count in pairs(codes) do
       total_codes[code] = (total_codes[code] or 0) + count
     end
