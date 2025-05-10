@@ -180,7 +180,7 @@ for round in $(seq 1 "$ROUNDS"); do
       echo "[Round $round] ERROR: docker compose down failed"
       exit 1
   fi
-  if ! docker compose up -d --quiet ${SCALE_ARGS}; then
+  if ! docker compose up -d ${SCALE_ARGS}; then
       echo "[Round $round] ERROR: docker compose up failed"
       exit 1
   fi
