@@ -126,77 +126,31 @@ request = function()
   end
 end
 
--- Initialize status code tracking with a thread-local approach
-local thread_local = {}
-
--- Make sure we have a global table for thread data
--- Even if wrk.thread changes between setup() and response()
-if _G.thread_data == nil then
-  _G.thread_data = {}
-end
+-- Create a SINGLE shared status table across all threads
+local status_codes = {}
 
 -- setup() is called once for each thread
 setup = function(thread)
-  -- Create a new table for this thread's status codes
-  thread_local[thread:get_id()] = {}
-  
-  -- Store the thread ID in the thread's environment
-  thread:set("id", thread:get_id())
-  
-  -- Store in global table too for backup
-  _G.thread_data[thread:get_id()] = {}
+  -- Nothing special to do here
+  thread:set("status_codes", status_codes)
 end
 
 -- response() is called for each HTTP response received
 response = function(status, headers, body)
-  -- Get the current thread's ID (should be available in thread environment)
-  local thread_id = wrk.thread:get("id")
-  
-  -- Try to use the thread-local table first
-  local codes_table = thread_local[thread_id]
-  
-  -- If that fails, try the global backup
-  if not codes_table then
-    codes_table = _G.thread_data[thread_id]
-    
-    -- If we still don't have a table, create a new one
-    if not codes_table then
-      _G.thread_data[thread_id] = {}
-      codes_table = _G.thread_data[thread_id]
-    end
-  end
-  
-  -- Now increment the counter for this status code
-  codes_table[status] = (codes_table[status] or 0) + 1
+  -- Use the shared status codes table
+  status_codes[status] = (status_codes[status] or 0) + 1
 end
 
 -- done() is called once after all requests are complete
 done = function(summary, latency, requests)
   print("=== Status Code Summary (wrk2 Lua) ===")
-  local aggregated_codes = {}
-
-  -- Combine counts from all threads (from both local and global sources)
-  -- First from thread_local
-  for _, codes in pairs(thread_local) do
-    for code, count in pairs(codes) do
-      aggregated_codes[code] = (aggregated_codes[code] or 0) + count
-    end
-  end
   
-  -- Then from global backup
-  for _, codes in pairs(_G.thread_data) do
-    for code, count in pairs(codes) do
-      aggregated_codes[code] = (aggregated_codes[code] or 0) + count
-    end
-  end
-
-  -- Print the aggregated results
-  if next(aggregated_codes) == nil then
+  if next(status_codes) == nil then
     print("No status codes were recorded.")
   else
-    for code, count in pairs(aggregated_codes) do
+    for code, count in pairs(status_codes) do
       print("Status " .. code .. ": " .. count)
     end
   end
   print("=== End Status Code Summary ===")
-end
+end 
