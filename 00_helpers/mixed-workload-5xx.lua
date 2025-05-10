@@ -126,59 +126,22 @@ request = function()
   end
 end
 
--- Simple direct coding - don't try complex thread handling
--- Just use global variables
-
--- Global counter for responses
+-- Global counter for status codes
 status_codes = {}
 
--- Print a message to show script is loaded properly
-print(">>> [Lua] Thread handler functions initialized...")
-
 setup = function(thread)
-  -- Nothing to do in setup
-  print(">>> [Lua] Setup function called")
+  -- Nothing to do
 end
 
 response = function(status, headers, body)
-  -- Just count statuses in the global table
+  -- Count status codes
   status_codes[status] = (status_codes[status] or 0) + 1
 end
 
 done = function(summary, latency, requests)
-  -- Print raw data available to us
-  print("=== RAW WRK SUMMARY DATA ===")
-  for k, v in pairs(summary) do
-    print(string.format("summary.%s = %s", k, tostring(v)))
+  print("=== STATUS CODE SUMMARY ===")
+  for code, count in pairs(status_codes) do
+    print("Status " .. code .. ": " .. count)
   end
-  
-  print("\n=== RAW LATENCY DATA ===")
-  if latency then
-    for k, v in pairs(latency) do
-      print(string.format("latency.%s = %s", k, tostring(v)))
-    end
-  else
-    print("No latency data available")
-  end
-  
-  print("\n=== RAW REQUESTS DATA ===")
-  if requests then
-    for k, v in pairs(requests) do
-      print(string.format("requests.%s = %s", k, tostring(v)))
-    end
-  else 
-    print("No requests data available")
-  end
-  
-  print("\n=== STATUS CODE SUMMARY ===")
-  if next(status_codes) == nil then
-    print("No status codes were recorded. Total requests according to summary: " .. 
-          (summary and summary.requests or "unknown"))
-  else
-    for code, count in pairs(status_codes) do
-      print(string.format("Status %d: %d", code, count))
-    end
-  end
-  
-  print("=== END WRK DATA ===")
+  print("=== END STATUS CODE SUMMARY ===")
 end
