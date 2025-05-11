@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+BASE_SEED="${BASE_SEED:-16}"
+
 if [ ! -d venv ]; then
   echo "🔧  creating venv ..."
   python3 -m venv venv
@@ -13,7 +15,7 @@ echo "✅  venv activated ($(python -V))"
 
 ./01_prepare_env.sh
 ./02_steady_norepl.sh
-./chaos.sh
+./chaos.sh --seed "$BASE_SEED"
 
 MODEL=DeathStarBench/socialNetwork/results/norepl/R_avg_base.json
 LIVE=DeathStarBench/socialNetwork/results/norepl/summary.json
