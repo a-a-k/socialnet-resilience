@@ -9,7 +9,7 @@ on:
 jobs:
   bench:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 3500
 
     steps:
       - uses: actions/checkout@v4
