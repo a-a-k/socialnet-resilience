@@ -1,4 +1,4 @@
-name: SocialNet-Replicated-Resilience
+name: SocialNet-Repl-Resilience
 
 on:
   push:
@@ -10,6 +10,9 @@ jobs:
   bench:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
+    strategy:
+      matrix:
+        worker: [1, 2, 3, 4, 5]
 
     steps:
       - uses: actions/checkout@v4
@@ -40,17 +43,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install numpy networkx scipy  
 
-      - name: Run replicated pipeline
+      - name: Run replicated pipeline (worker ${{ matrix.worker }})
         env:
           COMPOSE_DOCKER_CLI_BUILD: 1
           DOCKER_BUILDKIT: 1
+          BASE_SEED: ${{ matrix.worker }}
         run: |
           chmod +x pipeline_repl.sh
-          ./pipeline_repl.sh
+          ./pipeline_repl.sh --seed "$BASE_SEED"
 
-      - name: Upload replicated results
+      - name: Upload replicated results (worker ${{ matrix.worker }})
         if: ${{ always() }}  
         uses: actions/upload-artifact@v4
         with:
-          name: replicated-resilience-results
+          name: replicated-resilience-results-${{ matrix.worker }}
           path: DeathStarBench/socialNetwork/results/repl/*.json
