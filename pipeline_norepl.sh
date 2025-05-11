@@ -11,6 +11,10 @@ fi
 source ./venv/bin/activate
 echo "✅  venv activated ($(python -V))"
 
+./01_prepare_env.sh
+./02_steady_norepl.sh
+./chaos.sh
+
 MODEL=DeathStarBench/socialNetwork/results/norepl/R_avg_base.json
 LIVE=DeathStarBench/socialNetwork/results/norepl/summary.json
 OUT=DeathStarBench/socialNetwork/results/norepl/summary_norepl.json
