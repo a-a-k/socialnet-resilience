@@ -16,7 +16,7 @@ wrk -t2 -c32 -d30s -R300 \
   -s wrk2/scripts/social-network/mixed-workload.lua \
   http://localhost:8080/index.html
 
-sleep 60
+sleep 30
 echo "graph ..."
 
 # Jaeger deps & theoretical R_avg
