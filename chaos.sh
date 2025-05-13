@@ -18,7 +18,7 @@ set -euo pipefail
 cd "$(dirname "$0")/DeathStarBench/socialNetwork"
 
 # ─── Tunables (can be overridden via env-vars) ────────────────────────────
-ROUNDS=${ROUNDS:-500}
+ROUNDS=${ROUNDS:-600}
 FAIL_FRACTION=${FAIL_FRACTION:-0.30}     # share of containers to kill
 SEED=${SEED:-16}                         # diff: new – deterministic RNG
 RATE=${RATE:-300}
@@ -45,7 +45,7 @@ mkdir -p "$OUTDIR"
 
 # ─── Helper: wait until the frontend is reachable (or give up after 60 s) ─
 wait_ready() {
-  timeout 60 bash -c \
+  timeout 30 bash -c \
     'until curl -fsS '"$URL"' >/dev/null 2>&1; do sleep 2; done' || true
 }
 
@@ -58,9 +58,9 @@ run_wrk() {
   wrk -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
       -s "$LUA" "$URL" >"$logfile" 2>&1 || true
 
-  echo "[run_wrk] --- Full contents of $logfile ---" >&2
-  cat "$logfile" >&2
-  echo "[run_wrk] --- End of $logfile ---" >&2
+  # echo "[run_wrk] --- Full contents of $logfile ---" >&2
+  # cat "$logfile" >&2
+  # echo "[run_wrk] --- End of $logfile ---" >&2
 
   
   if grep -q 'requests in' "$logfile"; then
@@ -130,11 +130,11 @@ PY
   printf '%s\n' "${victims[@]}" >"$OUTDIR/killed_${round}.txt"
 
   # Print human-friendly names for killed containers
-  echo "[Round $round] Killed containers (ID : Name):"
-  for id in "${victims[@]}"; do
-    name=$(docker ps -a --filter "id=$id" --format "{{.Names}}")
-    echo "$id : $name"
-  done
+  # echo "[Round $round] Killed containers (ID : Name):"
+  # for id in "${victims[@]}"; do
+  #   name=$(docker ps -a --filter "id=$id" --format "{{.Names}}")
+  #   echo "$id : $name"
+  # done
 
   # diff: disable auto-restart so that victims stay down for the whole round
   docker update --restart=no "${victims[@]}" || true
@@ -154,8 +154,8 @@ for round in $(seq 1 "$ROUNDS"); do
   wait_ready
   echo "[Round $round] stack is healthy."
 
-  echo "[Round $round] Running containers:"
-  docker ps
+  # echo "[Round $round] Running containers:"
+  # docker ps
   #echo "[Round $round] Disk usage:"
   #df -h
   #echo "[Round $round] Memory usage:"
