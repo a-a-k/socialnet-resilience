@@ -183,6 +183,27 @@ cat results/summary_norepl.json
 # }
 ```
 
+Actual results for v1.0.0 release:
+
+
+[![v1.0.0 Artifact (norepl)](https://img.shields.io/badge/Artifact-v1.0.0-blue)](https://github.com/a-a-k/socialnet-resilience/actions/runs/14955221899/artifacts/3101768547) Without replication:
+
+```
+{
+  "R_model_norepl": 0.161,
+  "R_live_norepl": 0.1845
+}
+```
+
+[![v1.0.0 Artifact (repl)](https://img.shields.io/badge/Artifact-v1.0.0-blue)](https://github.com/a-a-k/socialnet-resilience/actions/runs/14955221900/artifacts/3101807581) With replication:
+
+```
+{
+  "R_model_repl": 0.305,
+  "R_live_repl": 0.3046
+}
+```
+
 ---
 
 ## CI Integration
