@@ -12,7 +12,7 @@ import argparse
 from collections import Counter
 
 # ---------------- deterministic RNG ----------------
-_FIXED_SEED = 16
+_FIXED_SEED = 25
 random.seed(_FIXED_SEED)
 
 # ---------------- argument parsing ----------------
