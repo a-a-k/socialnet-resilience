@@ -20,7 +20,7 @@ cd "$(dirname "$0")/DeathStarBench/socialNetwork"
 # ─── Tunables (can be overridden via env-vars) ────────────────────────────
 ROUNDS=${ROUNDS:-500}
 FAIL_FRACTION=${FAIL_FRACTION:-0.30}     # share of containers to kill
-SEED=${SEED:-16}                         # diff: new – deterministic RNG
+SEED=${SEED:-22}                         # diff: new – deterministic RNG
 RATE=${RATE:-300}
 DURATION=${DURATION:-30}
 THREADS=${THREADS:-2}
