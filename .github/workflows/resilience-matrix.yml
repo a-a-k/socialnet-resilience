@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     strategy:
+      fail-fast: false
       matrix:
         mode: [norepl, repl]
         fail_fraction: [0.1, 0.3, 0.5, 0.7, 0.9]
