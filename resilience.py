@@ -13,7 +13,6 @@ from collections import Counter
 
 # ---------------- deterministic RNG ----------------
 _FIXED_SEED = 16
-random.seed(_FIXED_SEED)
 
 # ---------------- argument parsing ----------------
 ap = argparse.ArgumentParser()
@@ -22,7 +21,10 @@ ap.add_argument("-o", "--out", help="store result JSON here")
 ap.add_argument("--samples", type=int, default=4500000)
 ap.add_argument("--p_fail",  type=float, default=0.30)
 ap.add_argument('--repl', type=int, choices=[0,1], default=0)
+ap.add_argument('--seed', type=int, default=_FIXED_SEED)
 args = ap.parse_args()
+
+random.seed(args.seed)
 
 # ----- load graph ----------------------------------------------------------
 E = json.load(open(args.deps))["data"]
@@ -134,6 +136,7 @@ output = {
     "R_ep": {ep: round(R_ep[ep], 3) for ep in R_ep},
     "samples": args.samples,
     "p_fail": args.p_fail,
+    "seed": args.seed,
 }
 print(output)
 if args.out:
