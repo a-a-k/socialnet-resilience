@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
+# Optional tunables
+OUTDIR=${OUTDIR:-DeathStarBench/socialNetwork/results/repl}
+SEED=${SEED:-16}
+P_FAIL=${P_FAIL:-0.30}
+FAIL_FRACTION=${FAIL_FRACTION:-0.30}
+
 if [ ! -d venv ]; then
   echo "🔧  creating venv ..."
   python3 -m venv venv
@@ -12,12 +18,12 @@ source ./venv/bin/activate
 echo "✅  venv activated ($(python -V))"
 
 ./01_prepare_env.sh
-./04_steady_repl.sh
-./chaos.sh --repl
+SEED="$SEED" P_FAIL="$P_FAIL" FAIL_FRACTION="$FAIL_FRACTION" OUTDIR="$OUTDIR" ./04_steady_repl.sh
+SEED="$SEED" P_FAIL="$P_FAIL" FAIL_FRACTION="$FAIL_FRACTION" OUTDIR="$OUTDIR" ./chaos.sh --repl
 
-MODEL=DeathStarBench/socialNetwork/results/repl/R_avg_repl.json
-LIVE=DeathStarBench/socialNetwork/results/repl/summary.json
-OUT=DeathStarBench/socialNetwork/results/repl/summary_repl.json
+MODEL="$OUTDIR/R_avg_repl.json"
+LIVE="$OUTDIR/summary.json"
+OUT="$OUTDIR/summary_repl.json"
 
 jq -n \
   --arg m "$(jq .R_avg  "$MODEL")" \

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 
+# configurable output directory, RNG seed and failure probability
+OUTDIR=${OUTDIR:-results/norepl}
+SEED=${SEED:-16}
+P_FAIL=${P_FAIL:-0.30}
+
 echo "compose ..."
 set -euo pipefail; cd DeathStarBench/socialNetwork
-mkdir -p results/norepl
+mkdir -p "$OUTDIR"
 
 docker compose down
 docker compose up -d
@@ -24,6 +29,9 @@ ts=$(($(date +%s%N)/1000000))
 curl -s "http://localhost:16686/api/dependencies?endTs=$ts&lookback=3600000" \
      -o deps.json
 
-python3 resilience.py deps.json -o results/norepl/R_avg_base.json
+python3 resilience.py deps.json \
+  -o "$OUTDIR/R_avg_base.json" \
+  --seed "$SEED" \
+  --p_fail "$P_FAIL"
 
 echo "✅ steady_norepl done"
