@@ -2,9 +2,6 @@
 set -e
 
 # Optional tunables
-OUTDIR=${OUTDIR:-DeathStarBench/socialNetwork/results/norepl}
-OUTDIR=$(realpath -m "$OUTDIR")
-mkdir -p "$OUTDIR"
 SEED=${SEED:-16}
 P_FAIL=${P_FAIL:-0.30}
 FAIL_FRACTION=${FAIL_FRACTION:-0.30}
@@ -20,6 +17,9 @@ source ./venv/bin/activate
 echo "✅  venv activated ($(python -V))"
 
 ./01_prepare_env.sh
+OUTDIR=${OUTDIR:-DeathStarBench/socialNetwork/results/norepl}
+OUTDIR=$(realpath -m "$OUTDIR")
+mkdir -p "$OUTDIR"
 SEED="$SEED" P_FAIL="$P_FAIL" FAIL_FRACTION="$FAIL_FRACTION" OUTDIR="$OUTDIR" ./02_steady_norepl.sh
 SEED="$SEED" P_FAIL="$P_FAIL" FAIL_FRACTION="$FAIL_FRACTION" OUTDIR="$OUTDIR" ./chaos.sh
 
