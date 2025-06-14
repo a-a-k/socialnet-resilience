@@ -3,6 +3,8 @@ set -e
 
 # Optional tunables
 OUTDIR=${OUTDIR:-DeathStarBench/socialNetwork/results/norepl}
+OUTDIR=$(realpath -m "$OUTDIR")
+mkdir -p "$OUTDIR"
 SEED=${SEED:-16}
 P_FAIL=${P_FAIL:-0.30}
 FAIL_FRACTION=${FAIL_FRACTION:-0.30}
@@ -33,3 +35,8 @@ jq -n \
 
 echo "==> Combined summary for NOREPL written to $OUT"
 cat "$OUT"
+
+if ! ls "$OUTDIR"/*.json >/dev/null 2>&1; then
+  echo "❌ No JSON results found in $OUTDIR" >&2
+  exit 1
+fi

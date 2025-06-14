@@ -7,6 +7,8 @@ jobs:
   bench:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
+    env:
+      OUTDIR: DeathStarBench/socialNetwork/results/${{ matrix.mode }}-${{ matrix.fail_fraction }}-${{ matrix.seed }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,12 +51,9 @@ jobs:
           SEED: ${{ matrix.seed }}
           FAIL_FRACTION: ${{ matrix.fail_fraction }}
           P_FAIL: ${{ matrix.fail_fraction }}
-          OUTDIR: DeathStarBench/socialNetwork/results/${{ matrix.mode }}-${{ matrix.fail_fraction }}-${{ matrix.seed }}
         run: |
           chmod +x pipeline_${{ matrix.mode }}.sh
           ./pipeline_${{ matrix.mode }}.sh
-          mkdir -p "$OUTDIR"
-          cp DeathStarBench/socialNetwork/results/${{ matrix.mode }}/*.json "$OUTDIR"/
 
       - name: Upload results
         if: ${{ always() }}
@@ -62,3 +61,4 @@ jobs:
         with:
           name: "${{ matrix.mode }}-${{ matrix.fail_fraction }}-seed${{ matrix.seed }}"
           path: ${{ env.OUTDIR }}/*.json
+          if-no-files-found: error
