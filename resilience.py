@@ -18,7 +18,7 @@ _FIXED_SEED = 16
 ap = argparse.ArgumentParser()
 ap.add_argument("deps", help="Jaeger deps.json")
 ap.add_argument("-o", "--out", help="store result JSON here")
-ap.add_argument("--samples", type=int, default=4500000)
+ap.add_argument("--samples", type=int, default=500000)
 ap.add_argument("--p_fail",  type=float, default=0.30)
 ap.add_argument('--repl', type=int, choices=[0,1], default=0)
 ap.add_argument('--seed', type=int, default=_FIXED_SEED)
@@ -132,8 +132,8 @@ R_avg = sum(R_ep[ep] * endpoints[ep]["weight"] for ep in endpoints)
 
 # --- Output ---
 output = {
-    "R_avg": round(R_avg, 3),
-    "R_ep": {ep: round(R_ep[ep], 3) for ep in R_ep},
+    "R_avg": round(R_avg, 5),
+    "R_ep": {ep: round(R_ep[ep], 5) for ep in R_ep},
     "samples": args.samples,
     "p_fail": args.p_fail,
     "seed": args.seed,

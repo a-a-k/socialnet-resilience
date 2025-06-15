@@ -9,8 +9,8 @@ echo "compose ..."
 set -euo pipefail; cd DeathStarBench/socialNetwork
 mkdir -p "$OUTDIR"
 
-docker compose down
-docker compose up -d
+#docker compose down > /dev/null 2>&1
+docker compose up -d > /dev/null 2>&1
 
 ### data
 python3 scripts/init_social_graph.py --graph socfb-Reed98 --compose --ip 127.0.0.1 --port 8080
@@ -21,7 +21,7 @@ wrk -t2 -c32 -d30s -R300 \
   -s wrk2/scripts/social-network/mixed-workload.lua \
   http://localhost:8080/index.html
 
-sleep 60
+sleep 15
 echo "graph ..."
 
 # Jaeger deps & theoretical R_avg

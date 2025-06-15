@@ -8,7 +8,7 @@ REPO_ROOT=$(cd "$(dirname "$0")"; pwd)
 mkdir -p results
 
 ### Clone benchmark
-git clone https://github.com/delimitrou/DeathStarBench.git
+git clone https://github.com/delimitrou/DeathStarBench.git > /dev/null 2>&1
 cd DeathStarBench
 cd socialNetwork
 
@@ -16,12 +16,12 @@ mkdir -p 00_helpers
 
 ### System packages (Ubuntu)
 sudo apt-get update -qq
-sudo apt-get install -y jq bc git python3-venv lua-socket luarocks python3-scipy python3-pip
-sudo luarocks install luasocket
+sudo apt-get install -y jq bc git python3-venv lua-socket luarocks python3-scipy python3-pip > /dev/null 2>&1
+sudo luarocks install luasocket > /dev/null 2>&1
 
 # Use pip to ensure Python packages are available for the default python3
-sudo python3 -m pip install --upgrade pip
-sudo python3 -m pip install numpy networkx scipy
+sudo python3 -m pip install --upgrade pip > /dev/null 2>&1
+sudo python3 -m pip install numpy networkx scipy > /dev/null 2>&1
 
 if ! command -v docker >/dev/null; then
   echo "[bootstrap] Installing Docker CE…"
@@ -34,7 +34,7 @@ if ! command -v docker >/dev/null; then
     https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
     | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
   sudo apt-get update -qq
-  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin > /dev/null 2>&1
 fi
 
 ### Helper scripts

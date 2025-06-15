@@ -45,8 +45,8 @@ mkdir -p "$OUTDIR"
 
 # ─── Helper: wait until the frontend is reachable (or give up after 60 s) ─
 wait_ready() {
-  timeout 60 bash -c \
-    'until curl -fsS '"$URL"' >/dev/null 2>&1; do sleep 0.5; done' || true
+  timeout 15 bash -c \
+    'until curl -fsS '"$URL"' >/dev/null 2>&1; do sleep 0.3; done' || true
 }
 
 # ─── Helper: run wrk and ALWAYS return two numbers: total errors ───────────
@@ -222,7 +222,7 @@ python - <<'PY' "$rounds" "$error_sum" "$total_sum" "$OUTDIR/summary.json"
 import json, sys
 r, err, tot, path = list(map(int, sys.argv[1:4])) + [sys.argv[4]]
 R = 0.0 if tot == 0 else 1.0 - err / tot
-json.dump({"rounds": r, "R_live": R}, open(path, "w"), indent=2)
+json.dump({"rounds": r, "R_live": round(R, 5)}, open(path, "w"), indent=2)
 print(f"*** Mean R_live over {r} rounds: {R:.4f}")
 PY
 
