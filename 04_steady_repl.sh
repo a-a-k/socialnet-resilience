@@ -14,7 +14,7 @@ docker compose up -d \
   --scale home-timeline-service=3 \
   --scale user-timeline-service=3 \
   --scale text-service=3 \
-  --scale media-service=3
+  --scale media-service=3 > /dev/null 2>&1
 
 ### data
 python3 scripts/init_social_graph.py --graph socfb-Reed98 --compose --ip 127.0.0.1 --port 8080
@@ -25,7 +25,7 @@ wrk -t2 -c32 -d30s -R300 \
   -s wrk2/scripts/social-network/mixed-workload.lua \
   http://localhost:8080/index.html
 
-sleep 60
+sleep 15
 echo "graph ..."
 
 ts=$(($(date +%s%N)/1000000))
