@@ -46,7 +46,7 @@ mkdir -p "$OUTDIR"
 # ─── Helper: wait until the frontend is reachable (or give up after 60 s) ─
 wait_ready() {
   timeout 60 bash -c \
-    'until curl -fsS '"$URL"' >/dev/null 2>&1; do sleep 2; done' || true
+    'until curl -fsS '"$URL"' >/dev/null 2>&1; do sleep 0.5; done' || true
 }
 
 # ─── Helper: run wrk and ALWAYS return two numbers: total errors ───────────
@@ -58,9 +58,9 @@ run_wrk() {
   wrk -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
       -s "$LUA" "$URL" >"$logfile" 2>&1 || true
 
-  echo "[run_wrk] --- Full contents of $logfile ---" >&2
-  cat "$logfile" >&2
-  echo "[run_wrk] --- End of $logfile ---" >&2
+  #echo "[run_wrk] --- Full contents of $logfile ---" >&2
+  #cat "$logfile" >&2
+  #echo "[run_wrk] --- End of $logfile ---" >&2
 
   
   if grep -q 'requests in' "$logfile"; then
@@ -154,8 +154,8 @@ for round in $(seq 1 "$ROUNDS"); do
   wait_ready
   echo "[Round $round] stack is healthy."
 
-  echo "[Round $round] Running containers:"
-  docker ps
+  #echo "[Round $round] Running containers:"
+  #docker ps
   #echo "[Round $round] Disk usage:"
   #df -h
   #echo "[Round $round] Memory usage:"
@@ -195,14 +195,14 @@ for round in $(seq 1 "$ROUNDS"); do
       echo "[Round $round] ERROR: docker compose down failed"
       exit 1
   fi
-  if ! docker compose up -d ${SCALE_ARGS}; then
+  if ! docker compose up -d ${SCALE_ARGS} > /dev/null 2>&1; then
       echo "[Round $round] ERROR: docker compose up failed"
       exit 1
   fi
   echo "[Round $round] stack restarted."
 
-  echo "[Round $round] Exited containers:"
-  docker ps -a --filter "status=exited"
+  #echo "[Round $round] Exited containers:"
+  #docker ps -a --filter "status=exited"
 
   echo "counting..."
   ((rounds++))  || true
