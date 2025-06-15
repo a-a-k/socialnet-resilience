@@ -130,11 +130,11 @@ PY
   printf '%s\n' "${victims[@]}" >"$OUTDIR/killed_${round}.txt"
 
   # Print human-friendly names for killed containers
-  echo "[Round $round] Killed containers (ID : Name):"
-  for id in "${victims[@]}"; do
-    name=$(docker ps -a --filter "id=$id" --format "{{.Names}}")
-    echo "$id : $name"
-  done
+ # echo "[Round $round] Killed containers (ID : Name):"
+ # for id in "${victims[@]}"; do
+ #   name=$(docker ps -a --filter "id=$id" --format "{{.Names}}")
+ #   echo "$id : $name"
+ # done
 
   # diff: disable auto-restart so that victims stay down for the whole round
   docker update --restart=no "${victims[@]}" || true
