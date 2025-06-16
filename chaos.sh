@@ -18,7 +18,7 @@ set -euo pipefail
 cd "$(dirname "$0")/DeathStarBench/socialNetwork"
 
 # ─── Tunables (can be overridden via env-vars) ────────────────────────────
-ROUNDS=${ROUNDS:-500}
+ROUNDS=${ROUNDS:-450}
 FAIL_FRACTION=${FAIL_FRACTION:-0.30}     # share of containers to kill
 SEED=${SEED:-16}
 RATE=${RATE:-300}
