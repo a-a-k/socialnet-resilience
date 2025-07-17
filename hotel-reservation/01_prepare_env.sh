@@ -68,8 +68,8 @@ minikube addons enable metrics-server
 
 ### Helper scripts
 echo "[bootstrap] Copying hotel-resilience.py helper script..."
-if [ -f "../hotel-resilience.py" ]; then
-  cp ../hotel-resilience.py .
+if [ -f "../../hotel-resilience.py" ]; then
+  cp ../../hotel-resilience.py .
   echo "[bootstrap] ✓ hotel-resilience.py copied successfully"
 else
   echo "[bootstrap] ✗ Error: hotel-resilience.py not found at ../hotel-resilience.py"
@@ -80,7 +80,7 @@ fi
 echo "[bootstrap] Updating Kubernetes deployments..."
 
 # Copy our overridden deployment files
-OVERRIDES_PATH="../../../overrides/kubernetes-overrides"
+OVERRIDES_PATH="../../overrides/kubernetes-overrides"
 if [ -d "$OVERRIDES_PATH" ]; then
   cp -r "$OVERRIDES_PATH"/* ./kubernetes/
   echo "[bootstrap] ✓ Kubernetes overrides copied successfully"
