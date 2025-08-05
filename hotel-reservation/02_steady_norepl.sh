@@ -67,6 +67,23 @@ for svc in "${!SERVICE_URLS[@]}"; do
 done
 echo ""
 
+echo " Waiting for port forwarding to be ready ..."
+timeout 60 bash -c "until curl -fsS http://localhost:5000 > /dev/null 2>&1; do sleep 2; done" || {
+  echo " Frontend service not reachable after 60 seconds"
+  echo "🔍 Debugging info:"
+  echo "Port forwarding processes:"
+  ps aux | grep "kubectl.*port-forward" || echo "No port-forward processes found"
+  echo "Network connections:"
+  netstat -tlnp | grep :5000 || echo "No connections on port 5000"
+  echo "Service status:"
+  kubectl get svc frontend
+  echo "Pod status:"
+  kubectl get pod -l app=frontend || kubectl get pod | grep frontend
+  exit 1
+}
+echo " Frontend service is ready!"
+
+
 echo "workload ..."
 wrk -t2 -c32 -d30s -R300 \
   -s wrk2/scripts/hotel-reservation/mixed-workload_type_1.lua \
