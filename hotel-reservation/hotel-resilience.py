@@ -158,8 +158,6 @@ output = {
     "samples": args.samples,
     "p_fail": args.p_fail,
     "seed": args.seed,
-    "repl": args.repl,
-    "application": "hotel-reservation"
 }
 print(output)
 if args.out:

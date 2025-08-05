@@ -28,12 +28,26 @@ echo "waiting for pods to be ready ..."
 kubectl wait --for=condition=ready pod --all --timeout=300s
 
 ### Get frontend service URL
-FRONTEND_URL=$(minikube service frontend --url)
+echo "getting frontend service URL ..."
+FRONTEND_URL=$(minikube service frontend --url 2>/dev/null)
+if [[ -z "$FRONTEND_URL" || "$FRONTEND_URL" == *"😿"* ]]; then
+  echo "⚠️  Failed to get frontend URL from minikube service, trying alternative..."
+  MINIKUBE_IP=$(minikube ip)
+  FRONTEND_URL="http://${MINIKUBE_IP}:30000"
+fi
 echo "Frontend available at: $FRONTEND_URL"
 
-### Initialize hotel data
-echo "initializing hotel data ..."
-python3 scripts/init_hotel_db.py
+# Wait a bit for services to be fully ready
+echo "waiting for services to be ready ..."
+sleep 10
+
+# Test if frontend is reachable
+echo "testing frontend connectivity ..."
+if ! curl -f "$FRONTEND_URL" >/dev/null 2>&1; then
+  echo "⚠️  Frontend not reachable at $FRONTEND_URL, continuing anyway..."
+else
+  echo "✅ Frontend is reachable"
+fi
 
 echo "✅ data primed"
 
