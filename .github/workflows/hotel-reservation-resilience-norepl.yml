@@ -1,0 +1,50 @@
+name: HotelReservation-Baseline-Resilience
+
+on:
+  push:
+    branches: [feat/hotel-reservation]
+  pull_request:
+    branches: [feat/hotel-reservation]
+
+jobs:
+  bench:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free space
+        run: |
+          sudo rm -rf /opt/hostedtoolcache /usr/local/lib/android || true
+
+      - name: Make scripts executable
+        run: chmod +x $(git ls-files '*.sh')
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy networkx scipy
+
+
+      - name: Run baseline pipeline (no replication)
+        env:
+          OUTDIR: results/hotel-norepl
+          SEED: 16
+          P_FAIL: 0.30
+        run: |
+          cd hotel-reservation
+          chmod +x pipeline_norepl.sh
+          ./pipeline_norepl.sh
+
+      - name: Upload baseline results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotel-baseline-resilience-results
+          path: DeathStarBench/hotelReservation/results/hotel-norepl/*.json
