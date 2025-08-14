@@ -146,9 +146,20 @@ setup_port_forwarding() {
 # ─── Helper: wait until the frontend is reachable ─────────────────────────
 wait_ready() {
   echo "⏳ Waiting for frontend to be ready at $URL..."
-  timeout 30 bash -c \
-    'until curl -fsSL '"$URL"' >/dev/null 2>&1; do sleep 1; done' || {
-    echo "⚠️  WARNING: Frontend not reachable at $URL after 30s timeout"
+  
+  # First, wait for the port to be open
+  timeout 60 bash -c \
+    'until nc -z localhost 5000 >/dev/null 2>&1; do sleep 1; done' || {
+    echo "⚠️  WARNING: Port 5000 not open after 60s timeout"
+    return 1
+  }
+  
+  # Then wait for the application to respond (try a simple health check)
+  timeout 60 bash -c \
+    'until curl -f '"$URL"'hotels?inDate=2015-04-09&outDate=2015-04-10&lat=38.0235&lon=-122.095 >/dev/null 2>&1; do sleep 2; done' || {
+    echo "⚠️  WARNING: Frontend API not reachable at $URL after 60s timeout"
+    echo "🔍 Trying basic connectivity test..."
+    curl -v "$URL" || true
     return 1
   }
   echo "✅ Frontend is ready!"
@@ -347,22 +358,26 @@ restart_stack_with_chaos() {
     local frontend_pod=$(kubectl get pods -l io.kompose.service=frontend -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
     if [[ -n "$frontend_pod" ]]; then
       echo "🔍 Testing direct connection to pod $frontend_pod..."
-      kubectl exec "$frontend_pod" -- curl -f http://localhost:5000 > /dev/null 2>&1 && {
+      kubectl exec "$frontend_pod" -- curl -f "http://localhost:5000" > /dev/null 2>&1 && {
         echo "✅ Pod responds directly, issue might be with port forwarding"
       } || {
         echo "❌ Pod doesn't respond directly, application might not be ready"
+        echo "🔍 Pod logs:"
+        kubectl logs "$frontend_pod" --tail=10 || true
       }
     fi
     
-    # Test the actual URL with redirect following
-    echo "🔍 Testing frontend URL with redirects..."
-    timeout 30 bash -c "until curl -fsSL http://localhost:5000/ >/dev/null 2>&1; do sleep 2; done" || {
+    # Test the actual URL with a proper API endpoint
+    echo "🔍 Testing frontend API endpoint..."
+    timeout 60 bash -c "until curl -fsSL 'http://localhost:5000' >/dev/null 2>&1; do sleep 2; done" || {
       echo "❌ Frontend service not reachable after extended testing"
       echo "🔍 Final debugging info:"
       echo "Service status:"
       kubectl get svc frontend -o wide
       echo "Endpoints:"
       kubectl get endpoints frontend
+      echo "🔍 Testing basic connectivity:"
+      curl -v "http://localhost:5000" || true
       return 1
     }
     echo "✅ Frontend service is ready!"
