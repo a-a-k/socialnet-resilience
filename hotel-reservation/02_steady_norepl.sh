@@ -123,7 +123,7 @@ echo "✅ Frontend service is ready!"
 
 
 echo "🚀 Running workload ..."
-wrk2 -t2 -c32 -d30s -R300 \
+wrk -t2 -c32 -d30s -R300 \
   -s wrk2/scripts/hotel-reservation/mixed-workload_type_1.lua \
   http://localhost:5000/
 
