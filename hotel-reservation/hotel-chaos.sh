@@ -14,9 +14,20 @@ DURATION=${DURATION:-30}
 THREADS=${THREADS:-2}
 CONNS=${CONNS:-32}
 FRONTEND_PORT=${FRONTEND_PORT:-5000}
-URL="http://localhost:${FRONTEND_PORT}/index.html"
+URL="http://localhost:${FRONTEND_PORT}/"
 LUA=${LUA:-wrk2/scripts/hotel-reservation/mixed-workload_type_1.lua}
 MODE="norepl"
+
+# Verify we have the necessary files
+if [[ ! -d "kubernetes" ]]; then
+  echo "❌ Error: kubernetes/ directory not found. Are you in the right location?"
+  exit 1
+fi
+
+if [[ ! -f "$LUA" ]]; then
+  echo "❌ Error: Lua script not found at $LUA"
+  exit 1
+fi
 
 # number of replicas for the "replicated" scenario
 if [[ ${1:-} == "--repl" || ${1:-} == "-r" ]]; then
@@ -27,9 +38,8 @@ fi
 OUTDIR=${OUTDIR:-results/hotel-${MODE}-chaos}
 mkdir -p "$OUTDIR"
 
-# Declare associative arrays to track port forwarding
-declare -A SERVICE_PIDS
-declare -A SERVICE_URLS
+  declare -A SERVICE_PIDS
+  declare -A SERVICE_URLS
 
 # ─── Helper: cleanup port forwarding ──────────────────────────────────────
 cleanup_port_forwards() {
@@ -43,51 +53,105 @@ cleanup_port_forwards() {
   SERVICE_URLS=()
 }
 
-# ─── Helper: setup port forwarding for all services ───────────────────────
+# ─── Helper: setup port forwarding for running services ───────────────────
 setup_port_forwarding() {
-  echo "🔌 Setting up port forwarding for all services ..."
+  local killed_services_file="$1"
+  local killed_services=()
+  
+  # Read killed services from file if it exists
+  if [[ -f "$killed_services_file" ]]; then
+    mapfile -t killed_services < "$killed_services_file"
+  fi
+  
+  echo "🔌 Setting up port forwarding for running services ..."
   
   # Kill any lingering kubectl port-forwards
   pkill -f "kubectl.*port-forward" || true
   sleep 2
 
-  # Get all non-system services and their ports
-  local services=$(kubectl get svc -o json | jq -r '
-    .items[]
-    | select(.metadata.namespace != "kube-system")
-    | . as $svc
-    | $svc.spec.ports[]
-    | [$svc.metadata.name, .port] | @tsv
-  ')
+  # Service port mappings - including all services that might be needed
+  declare -A service_ports=(
+    # Main application services
+    ["frontend"]="5000"
+    ["search"]="8082" 
+    ["geo"]="8083"
+    ["profile"]="8081"
+    ["rate"]="8084"
+    ["recommendation"]="8085"
+    ["reservation"]="8087"
+    ["user"]="8086"
+    # Supporting services
+    ["consul"]="8500"
+    ["jaeger"]="16686"
+    # Database services (using different ports to avoid conflicts)
+    ["mongodb-geo"]="27017"
+    ["mongodb-profile"]="27018"
+    ["mongodb-rate"]="27019"
+    ["mongodb-recommendation"]="27020"
+    ["mongodb-reservation"]="27021"
+    ["mongodb-user"]="27022"
+    # Cache services
+    ["memcached-profile"]="11211"
+    ["memcached-rate"]="11212"
+    ["memcached-reserve"]="11213"
+  )
 
-  # Start port forwarding each service
-  while IFS=$'\t' read -r svc port; do
-    echo "🔁 Port-forwarding service/$svc:$port ➜ localhost:$port ..."
+  # Forward ports for running services only
+  for service in "${!service_ports[@]}"; do
+    local port="${service_ports[$service]}"
     
-    # Run kubectl port-forward in background
-    kubectl port-forward "service/$svc" "${port}:${port}" > /dev/null 2>&1 &
-    local pid=$!
+    # Skip if service is killed (only applies to main application services)
+    if [[ " ${killed_services[*]} " =~ " ${service} " ]]; then
+      echo "💀 Skipping port forward for killed service: $service"
+      continue
+    fi
     
-    SERVICE_PIDS["$svc"]=$pid
-    SERVICE_URLS["$svc"]="http://localhost:${port}"
-  done <<< "$services"
-
-  # Show access URLs
-  echo "🎯 Port-forwarded services:"
-  for svc in "${!SERVICE_URLS[@]}"; do
-    echo "✅ $svc: ${SERVICE_URLS[$svc]}"
+    # Check if service exists and has pods running
+    if kubectl get svc "$service" >/dev/null 2>&1; then
+      # For deployment-based services, check replicas
+      if kubectl get deployment "$service" >/dev/null 2>&1; then
+        local replicas=$(kubectl get deployment "$service" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+        if [[ "$replicas" -gt 0 ]]; then
+          echo "🔁 Port-forwarding service/$service:$port ➜ localhost:$port ..."
+          kubectl port-forward "service/$service" "$port:$port" > /dev/null 2>&1 &
+          local pid=$!
+          SERVICE_PIDS["$service"]=$pid
+          SERVICE_URLS["$service"]="http://localhost:$port"
+        else
+          echo "💀 Service $service has 0 replicas, skipping port forward"
+        fi
+      else
+        # For non-deployment services (like some system services), just try to forward
+        echo "🔁 Port-forwarding service/$service:$port ➜ localhost:$port ..."
+        kubectl port-forward "service/$service" "$port:$port" > /dev/null 2>&1 &
+        local pid=$!
+        SERVICE_PIDS["$service"]=$pid
+        SERVICE_URLS["$service"]="http://localhost:$port"
+      fi
+    else
+      echo "⚠️  Service $service not found, skipping port forward"
+    fi
   done
+
+  echo "🎯 Port-forwarded services (${#SERVICE_URLS[@]} total):"
+  for service in "${!SERVICE_URLS[@]}"; do
+    echo "✅ $service: ${SERVICE_URLS[$service]}"
+  done
+  
+  if [[ ${#SERVICE_URLS[@]} -eq 0 ]]; then
+    echo "⚠️  No services are being port-forwarded!"
+  fi
 }
 
 # ─── Helper: wait until the frontend is reachable ─────────────────────────
 wait_ready() {
-  echo "Waiting for frontend to be ready at $URL..."
-  timeout 60 bash -c \
-    'until curl -fsS '"$URL"' >/dev/null 2>&1; do sleep 1; done' || {
-    echo "WARNING: Frontend not reachable at $URL after 60s timeout"
+  echo "⏳ Waiting for frontend to be ready at $URL..."
+  timeout 30 bash -c \
+    'until curl -fsSL '"$URL"' >/dev/null 2>&1; do sleep 1; done' || {
+    echo "⚠️  WARNING: Frontend not reachable at $URL after 30s timeout"
     return 1
   }
-  echo "Frontend is ready!"
+  echo "✅ Frontend is ready!"
 }
 
 # ─── Helper: run wrk and return total errors ──────────────────────────────
@@ -96,8 +160,8 @@ run_wrk() {
   local expected_total=$((RATE * DURATION))
   local total errors
 
-  # Set TARGET_URL environment variable for the Lua script
-  TARGET_URL="$URL" wrk2 -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
+  # Use wrk2 for rate-limited load testing
+  wrk2 -t"$THREADS" -c"$CONNS" -d"${DURATION}s" -R"$RATE" \
       -s "$LUA" "$URL" >"$logfile" 2>&1 || true
 
   if grep -q 'requests in' "$logfile"; then
@@ -135,85 +199,182 @@ run_wrk() {
   echo "$total $errors"
 }
 
-# ─── Helper: kill a random subset of application pods ─────────────────────
-random_kill() {
+# ─── Helper: determine which services to kill and return list ─────────────
+determine_victims() {
   local fraction="$1" ; local round="$2"
-
-  # Get all hotel-reservation application pods (exclude system/monitoring pods)
-  mapfile -t pods < <(
-      kubectl get pods --no-headers -o custom-columns=":metadata.name" \
-      | grep -vE '(jaeger|consul|mongodb|memcached)' \
-      | grep -E '(frontend|search|geo|profile|rate|recommendation|reservation|user)'
-  )
-
-  local total=${#pods[@]}
-  (( total == 0 )) && { echo "No running application pods!" >&2; return; }
+  
+  # All available services
+  local all_services=("frontend" "search" "geo" "profile" "rate" "recommendation" "reservation" "user")
+  local total=${#all_services[@]}
 
   # Deterministic sample via python (respects SEED)
-  mapfile -t victims < <(python3 - "$fraction" "$SEED" "$round" \
-      "${pods[@]}" <<'PY'
+  python3 - "$fraction" "$SEED" "$round" "${all_services[@]}" <<'PY'
 import sys, random, math
-frac   = float(sys.argv[1])
-seed   = int(sys.argv[2]) + int(sys.argv[3])      # base-seed + round
-pods = sys.argv[4:]                               # remaining argv[]
+frac = float(sys.argv[1])
+seed = int(sys.argv[2]) + int(sys.argv[3])      # base-seed + round
+services = sys.argv[4:]                         # remaining argv[]
 random.seed(seed)
-kill_n = max(1, math.ceil(len(pods) * frac))
-kill_n = min(kill_n, len(pods))  # don't exceed available pods
-if pods:
-    print('\n'.join(random.sample(pods, k=kill_n)))
+kill_n = max(1, math.ceil(len(services) * frac))
+kill_n = min(kill_n, len(services))  # don't exceed available services
+if services:
+    print('\n'.join(random.sample(services, k=kill_n)))
 PY
-  )
-
-  local target_kill_count=${#victims[@]}
-  if [ $target_kill_count -gt 0 ]; then
-    printf '%s\n' "${victims[@]}" >"$OUTDIR/killed_${round}.txt"
-    echo "[Round $round] Killing $target_kill_count out of $total application pods"
-    kubectl delete pod "${victims[@]}" --force --grace-period=0 || true
-  else
-    echo "[Round $round] No pods to kill"
-  fi
 }
 
-# ─── Helper: deploy with appropriate scaling ───────────────────────────────
-deploy_stack() {
-  echo "Deploying Kubernetes stack..."
+# ─── Helper: deploy only healthy services (excluding killed ones) ─────────
+deploy_healthy_services() {
+  local killed_services_file="$1"
+  local killed_services=()
+  
+  # Read killed services from file if it exists
+  if [[ -f "$killed_services_file" ]]; then
+    mapfile -t killed_services < "$killed_services_file"
+  fi
+  
+  echo "🚀 Deploying Kubernetes stack (excluding killed services)..."
+  
+  # Deploy all services first
   kubectl apply -Rf kubernetes/ > /dev/null 2>&1
+  
+  # Scale down killed services to 0 replicas
+  for service in "${killed_services[@]}"; do
+    if [[ -n "$service" ]]; then
+      echo "💀 Scaling down killed service: $service"
+      kubectl scale deployment/"$service" --replicas=0 > /dev/null 2>&1 || true
+    fi
+  done
 
   if [[ "$MODE" == "repl" ]]; then
-    echo "Scaling services for replication..."
-    kubectl scale deployment/frontend --replicas=3 || true
-    kubectl scale deployment/search --replicas=3 || true
-    kubectl scale deployment/geo --replicas=3 || true
-    kubectl scale deployment/profile --replicas=3 || true
-    kubectl scale deployment/rate --replicas=3 || true
-    kubectl scale deployment/recommendation --replicas=3 || true
-    kubectl scale deployment/reservation --replicas=3 || true
-    kubectl scale deployment/user --replicas=3 || true
+    echo "📈 Scaling healthy services for replication..."
+    local all_services=("frontend" "search" "geo" "profile" "rate" "recommendation" "reservation" "user")
+    for service in "${all_services[@]}"; do
+      # Only scale up if not in killed list
+      if [[ ! " ${killed_services[*]} " =~ " ${service} " ]]; then
+        kubectl scale deployment/"$service" --replicas=3 > /dev/null 2>&1 || true
+      fi
+    done
   fi
 
-  echo "Waiting for pods to be ready..."
-  kubectl wait --for=condition=ready pod --all --timeout=300s || true
-  
-  # Setup port forwarding after pods are ready
-  setup_port_forwarding
+  echo "⏳ Waiting for healthy pods to be ready..."
+  # Wait for all healthy deployments to have ready pods
+  local all_services=("frontend" "search" "geo" "profile" "rate" "recommendation" "reservation" "user")
+  for service in "${all_services[@]}"; do
+    # Skip if service is killed
+    if [[ " ${killed_services[*]} " =~ " ${service} " ]]; then
+      continue
+    fi
+    
+    echo "⏳ Waiting for $service pods to be ready..."
+    kubectl wait --for=condition=available deployment/"$service" --timeout=120s || {
+      echo "⚠️  Deployment $service not ready within timeout"
+      kubectl get deployment "$service"
+      kubectl get pods -l io.kompose.service="$service"
+    }
+  done
 }
 
-# ─── Helper: cleanup and restart stack ─────────────────────────────────────
-restart_stack() {
-  echo "Restarting Kubernetes stack..."
+# ─── Helper: cleanup and restart stack with new chaos ─────────────────────
+restart_stack_with_chaos() {
+  local round="$1"
+  
+  echo "🔄 Restarting Kubernetes stack for round $round..."
   cleanup_port_forwards
   kubectl delete -Rf kubernetes/ > /dev/null 2>&1 || true
+  
+  # Wait for pods to be fully terminated
+  echo "⏳ Waiting for pods to terminate..."
+  timeout 120 bash -c 'while kubectl get pods --no-headers 2>/dev/null | grep -qE "(frontend|search|geo|profile|rate|recommendation|reservation|user)"; do sleep 2; done' || {
+    echo "⚠️  Some pods still exist after timeout, continuing anyway..."
+    kubectl get pods | grep -E "(frontend|search|geo|profile|rate|recommendation|reservation|user)" || echo "No application pods found"
+  }
+  
   sleep 5
-  deploy_stack
+  
+  # Determine which services to kill for this round
+  echo "[Round $round] Determining services to kill..."
+  killed_services_file="$OUTDIR/killed_services_${round}.txt"
+  determine_victims "$FAIL_FRACTION" "$round" > "$killed_services_file"
+  
+  killed_count=$(wc -l < "$killed_services_file" 2>/dev/null || echo 0)
+  if [[ $killed_count -gt 0 ]]; then
+    echo "[Round $round] Services to be killed:"
+    cat "$killed_services_file" | sed 's/^/  💀 /'
+  else
+    echo "[Round $round] No services to kill"
+  fi
+  
+  # Deploy only healthy services
+  deploy_healthy_services "$killed_services_file"
+  
+  # Additional check for frontend specifically (if not killed)
+  if ! grep -q "frontend" "$killed_services_file" 2>/dev/null; then
+    echo "⏳ Double-checking frontend is ready..."
+    kubectl wait --for=condition=available deployment/frontend --timeout=60s || {
+      echo "❌ Frontend deployment not available"
+      kubectl get deployment frontend
+      kubectl get pods -l io.kompose.service=frontend
+      return 1
+    }
+    
+    # Wait a bit more for the application inside the pod to start
+    echo "⏳ Waiting for frontend application to start..."
+    sleep 10
+  fi
+  
+  # Setup port forwarding for running services
+  setup_port_forwarding "$killed_services_file"
+  
+  echo "⏳ Waiting for port forwarding to be ready ..."
+  sleep 5
+  
+  # Test frontend connectivity (if not killed)
+  if ! grep -q "frontend" "$killed_services_file" 2>/dev/null; then
+    echo "🔍 Testing frontend connectivity..."
+    echo "🔍 Port forwarding processes:"
+    ps aux | grep "kubectl.*port-forward" | grep -v grep || echo "No port-forward processes found"
+    echo "🔍 Network connections on port 5000:"
+    netstat -tlnp | grep :5000 || echo "No connections on port 5000"
+    
+    # First check if the pod is actually ready
+    echo "🔍 Checking frontend pod readiness..."
+    kubectl get pods -l io.kompose.service=frontend -o wide
+    
+    # Check frontend pod logs for any startup issues
+    echo "🔍 Frontend pod logs (last 20 lines):"
+    kubectl logs -l io.kompose.service=frontend --tail=20 || echo "Could not get logs"
+    
+    # Test direct connection to the pod first
+    local frontend_pod=$(kubectl get pods -l io.kompose.service=frontend -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+    if [[ -n "$frontend_pod" ]]; then
+      echo "🔍 Testing direct connection to pod $frontend_pod..."
+      kubectl exec "$frontend_pod" -- curl -f http://localhost:5000 > /dev/null 2>&1 && {
+        echo "✅ Pod responds directly, issue might be with port forwarding"
+      } || {
+        echo "❌ Pod doesn't respond directly, application might not be ready"
+      }
+    fi
+    
+    # Test the actual URL with redirect following
+    echo "🔍 Testing frontend URL with redirects..."
+    timeout 30 bash -c "until curl -fsSL http://localhost:5000/ >/dev/null 2>&1; do sleep 2; done" || {
+      echo "❌ Frontend service not reachable after extended testing"
+      echo "🔍 Final debugging info:"
+      echo "Service status:"
+      kubectl get svc frontend -o wide
+      echo "Endpoints:"
+      kubectl get endpoints frontend
+      return 1
+    }
+    echo "✅ Frontend service is ready!"
+  else
+    echo "💀 Frontend service is killed for this round"
+  fi
 }
 
 # ─── Cleanup on exit ───────────────────────────────────────────────────────
 trap cleanup_port_forwards EXIT
 
 echo "=== Hotel Reservation Chaos Test ($ROUNDS rounds, fail=$FAIL_FRACTION, seed=$SEED, mode=$MODE) ==="
-
-# Initial deployment
-deploy_stack
 
 rounds=0
 total_sum=0
@@ -222,46 +383,60 @@ error_sum=0
 for round in $(seq 1 "$ROUNDS"); do
   echo "-- round $round/$ROUNDS --"
   
-  echo "[Round $round] waiting for stack to be healthy..."
-  if ! wait_ready; then
-    echo "[Round $round] Frontend not ready, skipping this round"
-    continue
+  # Deploy stack with chaos for this round
+  if ! restart_stack_with_chaos "$round"; then
+    echo "[Round $round] ERROR: Failed to deploy stack with chaos"
+    exit 1
   fi
-  echo "[Round $round] stack is healthy."
-
-  echo "[Round $round] injecting chaos..."
-  random_kill "$FAIL_FRACTION" "$round"
-  echo "[Round $round] chaos injected."
-
-  # Wait a bit for the chaos to take effect
-  sleep 5
-
-  echo "[Round $round] applying workload..."
-  logfile="$OUTDIR/wrk_${round}.log"
-  read total errors <<< "$(run_wrk "$logfile")"
-  if [[ $? -eq 0 ]]; then
-      if [[ "$total" =~ ^[0-9]+$ ]] && [[ "$errors" =~ ^[0-9]+$ ]]; then
-          echo "[Round $round] workload applied. Total: $total, Errors: $errors"
-          echo "[Round $round] Status code summary:"
-          grep '^Status ' "$logfile" | sort || true
-          echo "[Round $round] Socket errors:"
-          grep 'Socket errors:' "$logfile" || echo "None"
+  
+  # Check if frontend is available for testing
+  killed_services_file="$OUTDIR/killed_services_${round}.txt"
+  if grep -q "frontend" "$killed_services_file" 2>/dev/null; then
+    echo "[Round $round] Frontend is killed - all requests will fail"
+    # Still run the test to measure the failure
+    total=$((RATE * DURATION))
+    errors=$total
+  else
+    echo "[Round $round] waiting for stack to be healthy..."
+    if ! wait_ready; then
+      echo "[Round $round] Frontend not ready, treating as all errors"
+      total=$((RATE * DURATION))
+      errors=$total
+    else
+      echo "[Round $round] stack is healthy."
+      
+      echo "[Round $round] applying workload..."
+      logfile="$OUTDIR/wrk_${round}.log"
+      read total errors <<< "$(run_wrk "$logfile")"
+      if [[ $? -eq 0 ]]; then
+          if [[ "$total" =~ ^[0-9]+$ ]] && [[ "$errors" =~ ^[0-9]+$ ]]; then
+              echo "[Round $round] workload applied. Total: $total, Errors: $errors"
+              echo "[Round $round] Status code summary:"
+              grep '^Status ' "$logfile" | sort || true
+              echo "[Round $round] Socket errors:"
+              if grep -q 'Socket errors:' "$logfile"; then
+                grep 'Socket errors:' "$logfile"
+              else
+                echo "  None (good!)"
+              fi
+          else
+              echo "[Round $round] ERROR: run_wrk did not return valid numbers: total='$total', errors='$errors'"
+              echo "[Round $round] --- wrk log tail ---"
+              tail -40 "$logfile"
+              echo "[Round $round] --- end wrk log ---"
+              total=$((RATE * DURATION))
+              errors=$total
+          fi
       else
-          echo "[Round $round] ERROR: run_wrk did not return valid numbers: total='$total', errors='$errors'"
+          echo "[Round $round] ERROR: run_wrk failed"
           echo "[Round $round] --- wrk log tail ---"
           tail -40 "$logfile"
           echo "[Round $round] --- end wrk log ---"
+          total=$((RATE * DURATION))
+          errors=$total
       fi
-  else
-      echo "[Round $round] ERROR: run_wrk failed"
-      echo "[Round $round] --- wrk log tail ---"
-      tail -40 "$logfile"
-      echo "[Round $round] --- end wrk log ---"
+    fi
   fi
-
-  echo "[Round $round] restarting stack..."
-  restart_stack
-  echo "[Round $round] stack restarted."
 
   echo "counting..."
   ((rounds++))  || true
@@ -271,7 +446,7 @@ for round in $(seq 1 "$ROUNDS"); do
   if [ "$round" -eq 47 ]; then
       echo "[Round $round] Capturing logs from all pods..."
       kubectl logs --all-containers=true --prefix=true --tail=1000 \
-        -l 'app in (frontend,search,geo,profile,rate,recommendation,reservation,user)' \
+        -l 'io.kompose.service in (frontend,search,geo,profile,rate,recommendation,reservation,user)' \
         > "$OUTDIR/k8s_logs_round_${round}.txt" 2>/dev/null || true
   fi
 done
