@@ -516,14 +516,14 @@ for round in $(seq 1 "$ROUNDS"); do
     echo "[Round $round] waiting for stack to be healthy..."
     
     # Check what services are killed to determine expected behavior
-    local killed_services=()
+    killed_services=()
     if [[ -f "$killed_services_file" ]]; then
       mapfile -t killed_services < "$killed_services_file"
     fi
     
     # Count killed services to determine system degradation level
-    local killed_count=${#killed_services[@]}
-    local total_services=8  # frontend, search, geo, profile, rate, recommendation, reservation, user
+    killed_count=${#killed_services[@]}
+    total_services=8  # frontend, search, geo, profile, rate, recommendation, reservation, user
     
     if [[ $killed_count -ge 3 ]]; then
       echo "[Round $round] High chaos level: $killed_count services killed"
@@ -534,9 +534,9 @@ for round in $(seq 1 "$ROUNDS"); do
       echo "[Round $round] Simulated high-chaos scenario: Total: $total, Errors: $errors"
     else
       # Try multiple times to get frontend ready (in case of dependency issues)
-      local max_attempts=3
-      local attempt=1
-      local frontend_ready=false
+      max_attempts=3
+      attempt=1
+      frontend_ready=false
       
       while [[ $attempt -le $max_attempts ]] && [[ "$frontend_ready" == "false" ]]; do
         echo "[Round $round] Frontend readiness attempt $attempt/$max_attempts"
@@ -582,7 +582,7 @@ for round in $(seq 1 "$ROUNDS"); do
         echo "[Round $round] Checking if we can proceed with limited functionality..."
         
         # Check if any services are killed that would make testing meaningless
-        local any_killed=false
+        any_killed=false
         for service in "${killed_services[@]}"; do
           if [[ -n "$service" ]]; then
             any_killed=true
