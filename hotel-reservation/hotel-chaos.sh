@@ -168,7 +168,22 @@ wait_ready() {
     return 1
   }
   
-  # Simplified approach: just check if frontend pod is running and try basic connectivity
+  # Check for absolutely critical services that prevent frontend startup
+  local very_critical_killed=false
+  for service in "profile" "search"; do
+    if [[ " ${killed_services[*]} " =~ " ${service} " ]]; then
+      very_critical_killed=true
+      echo "❌ Very critical service killed: $service"
+      break
+    fi
+  done
+  
+  if [[ "$very_critical_killed" == "true" ]]; then
+    echo "❌ Frontend cannot start without critical services"
+    return 1
+  fi
+  
+  # Count remaining killed services
   local killed_count=0
   for service in "${killed_services[@]}"; do
     if [[ -n "$service" ]]; then
@@ -179,8 +194,7 @@ wait_ready() {
   echo "🔍 Chaos level: $killed_count services killed"
   
   if [[ $killed_count -ge 3 ]]; then
-    echo "⚠️  High chaos scenario - frontend likely non-functional"
-    echo "⚠️  Attempting basic connectivity test only..."
+    echo "⚠️  High chaos scenario - testing basic connectivity only..."
     
     # Very basic test - just see if we can connect
     timeout 30 bash -c \
@@ -321,8 +335,8 @@ deploy_healthy_services() {
     echo "💀 Frontend is killed - no special handling needed"
   else
     # Check if critical backend services are killed
-    local critical_killed=()
-    local critical_services=("user" "reservation" "geo")
+    critical_killed=()
+    critical_services=("user" "reservation" "geo" "profile")  # Added profile as critical
     
     for service in "${critical_services[@]}"; do
       if [[ " ${killed_services[*]} " =~ " ${service} " ]]; then
@@ -521,11 +535,29 @@ for round in $(seq 1 "$ROUNDS"); do
       mapfile -t killed_services < "$killed_services_file"
     fi
     
+    # Debug: show which services are killed
+    echo "[Round $round] Killed services: ${killed_services[*]}"
+    
     # Count killed services to determine system degradation level
     killed_count=${#killed_services[@]}
     total_services=8  # frontend, search, geo, profile, rate, recommendation, reservation, user
     
-    if [[ $killed_count -ge 3 ]]; then
+    # Check if very critical services are killed (frontend cannot start)
+    very_critical_killed=false
+    for service in "profile" "search"; do
+      if [[ " ${killed_services[*]} " =~ " ${service} " ]]; then
+        very_critical_killed=true
+        echo "[Round $round] Very critical service killed: $service"
+        break
+      fi
+    done
+    
+    if [[ "$very_critical_killed" == "true" ]]; then
+      echo "[Round $round] Frontend cannot start - treating as complete system failure"
+      total=$((RATE * DURATION))
+      errors=$total  # 100% error rate when frontend can't start
+      echo "[Round $round] System failure scenario: Total: $total, Errors: $errors"
+    elif [[ $killed_count -ge 3 ]]; then
       echo "[Round $round] High chaos level: $killed_count services killed"
       echo "[Round $round] System expected to have significant degradation"
       # Don't even try to get frontend fully working, just measure the chaos impact
