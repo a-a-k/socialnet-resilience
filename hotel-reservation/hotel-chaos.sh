@@ -145,24 +145,67 @@ setup_port_forwarding() {
 
 # ─── Helper: wait until the frontend is reachable ─────────────────────────
 wait_ready() {
+  local killed_services_file="$1"
+  local killed_services=()
+  
+  # Read killed services from file if it exists
+  if [[ -f "$killed_services_file" ]]; then
+    mapfile -t killed_services < "$killed_services_file"
+  fi
+  
+  # Check if frontend is killed
+  if [[ " ${killed_services[*]} " =~ " frontend " ]]; then
+    echo "💀 Frontend is killed - skipping readiness check"
+    return 1
+  fi
+  
   echo "⏳ Waiting for frontend to be ready at $URL..."
   
   # First, wait for the port to be open
-  timeout 60 bash -c \
+  timeout 120 bash -c \
     'until nc -z localhost 5000 >/dev/null 2>&1; do sleep 1; done' || {
-    echo "⚠️  WARNING: Port 5000 not open after 60s timeout"
+    echo "⚠️  WARNING: Port 5000 not open after 120s timeout"
     return 1
   }
   
-  # Then wait for the application to respond (try a simple health check)
-  timeout 60 bash -c \
+  # Check if critical services are killed that would prevent frontend from working
+  local critical_services=("search" "profile" "rate" "recommendation")
+  local killed_critical=()
+  
+  for service in "${critical_services[@]}"; do
+    if [[ " ${killed_services[*]} " =~ " ${service} " ]]; then
+      killed_critical+=("$service")
+    fi
+  done
+  
+  if [[ ${#killed_critical[@]} -gt 0 ]]; then
+    echo "⚠️  Critical services killed: ${killed_critical[*]}"
+    echo "⚠️  Frontend may not be fully functional, but attempting basic connectivity..."
+    
+    # Try basic root endpoint instead of complex API
+    timeout 30 bash -c \
+      'until curl -f '"$URL"' >/dev/null 2>&1; do sleep 2; done' || {
+      echo "⚠️  WARNING: Frontend basic connectivity failed after 30s timeout"
+      return 1
+    }
+    echo "✅ Frontend basic connectivity established (with limited functionality)"
+    return 0
+  fi
+  
+  # If no critical services are killed, try the full API
+  timeout 90 bash -c \
     'until curl -f '"$URL"'hotels?inDate=2015-04-09&outDate=2015-04-10&lat=38.0235&lon=-122.095 >/dev/null 2>&1; do sleep 2; done' || {
-    echo "⚠️  WARNING: Frontend API not reachable at $URL after 60s timeout"
+    echo "⚠️  WARNING: Frontend API not reachable at $URL after 90s timeout"
     echo "🔍 Trying basic connectivity test..."
-    curl -v "$URL" || true
-    return 1
+    timeout 10 bash -c \
+      'until curl -f '"$URL"' >/dev/null 2>&1; do sleep 1; done' || {
+      echo "⚠️  Basic connectivity also failed"
+      return 1
+    }
+    echo "✅ Frontend basic connectivity established (API may be limited)"
+    return 0
   }
-  echo "✅ Frontend is ready!"
+  echo "✅ Frontend is fully ready!"
 }
 
 # ─── Helper: run wrk and return total errors ──────────────────────────────
@@ -254,6 +297,32 @@ deploy_healthy_services() {
       kubectl scale deployment/"$service" --replicas=0 > /dev/null 2>&1 || true
     fi
   done
+  
+  # Special handling for frontend when critical services are killed
+  if [[ " ${killed_services[*]} " =~ " frontend " ]]; then
+    echo "💀 Frontend is killed - no special handling needed"
+  else
+    # Check if critical backend services are killed
+    local critical_killed=()
+    local critical_services=("user" "reservation" "geo" "search" "profile" "rate" "recommendation")
+    
+    for service in "${critical_services[@]}"; do
+      if [[ " ${killed_services[*]} " =~ " ${service} " ]]; then
+        critical_killed+=("$service")
+      fi
+    done
+    
+    if [[ ${#critical_killed[@]} -gt 0 ]]; then
+      echo "⚠️  Critical services killed: ${critical_killed[*]}"
+      echo "⚠️  Frontend may fail to start due to missing dependencies"
+      echo "🔄 Implementing workaround: restart frontend after other services are ready"
+      
+      # Let other services start first, then restart frontend
+      sleep 10
+      kubectl delete pod -l io.kompose.service=frontend > /dev/null 2>&1 || true
+      echo "🔄 Restarted frontend pod to retry initialization"
+    fi
+  fi
 
   if [[ "$MODE" == "repl" ]]; then
     echo "📈 Scaling healthy services for replication..."
@@ -341,46 +410,62 @@ restart_stack_with_chaos() {
   # Test frontend connectivity (if not killed)
   if ! grep -q "frontend" "$killed_services_file" 2>/dev/null; then
     echo "🔍 Testing frontend connectivity..."
-    echo "🔍 Port forwarding processes:"
-    ps aux | grep "kubectl.*port-forward" | grep -v grep || echo "No port-forward processes found"
-    echo "🔍 Network connections on port 5000:"
-    netstat -tlnp | grep :5000 || echo "No connections on port 5000"
     
-    # First check if the pod is actually ready
+    # Wait for frontend pod to be running first
+    echo "⏳ Waiting for frontend pod to be running..."
+    timeout 120 bash -c 'until kubectl get pods -l io.kompose.service=frontend --no-headers 2>/dev/null | grep -q "Running"; do sleep 2; done' || {
+      echo "⚠️  Frontend pod not running after timeout"
+      kubectl get pods -l io.kompose.service=frontend
+      return 1
+    }
+    
+    # Check if port forwarding is working
+    echo "🔍 Checking port forwarding status..."
+    if ! netstat -tlnp | grep -q :5000; then
+      echo "⚠️  Port 5000 not being forwarded, restarting port forward..."
+      pkill -f "kubectl.*port-forward.*frontend" || true
+      sleep 2
+      kubectl port-forward "service/frontend" "5000:5000" > /dev/null 2>&1 &
+      SERVICE_PIDS["frontend"]=$!
+      sleep 5
+    fi
+    
+    # Enhanced connectivity testing with better error handling
+    echo "🔍 Testing frontend connectivity with enhanced checks..."
+    
+    # First check if frontend pod is actually ready (not just running)
     echo "🔍 Checking frontend pod readiness..."
-    kubectl get pods -l io.kompose.service=frontend -o wide
+    kubectl get pods -l io.kompose.service=frontend
     
-    # Check frontend pod logs for any startup issues
+    # Check frontend pod logs for any startup errors
     echo "🔍 Frontend pod logs (last 20 lines):"
-    kubectl logs -l io.kompose.service=frontend --tail=20 || echo "Could not get logs"
+    kubectl logs -l io.kompose.service=frontend --tail=20 || true
     
-    # Test direct connection to the pod first
+    # Test direct connection to pod first
     local frontend_pod=$(kubectl get pods -l io.kompose.service=frontend -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
     if [[ -n "$frontend_pod" ]]; then
       echo "🔍 Testing direct connection to pod $frontend_pod..."
-      kubectl exec "$frontend_pod" -- curl -f "http://localhost:5000" > /dev/null 2>&1 && {
-        echo "✅ Pod responds directly, issue might be with port forwarding"
-      } || {
+      timeout 10 kubectl exec "$frontend_pod" -- curl -f http://localhost:5000/ >/dev/null 2>&1 || {
         echo "❌ Pod doesn't respond directly, application might not be ready"
         echo "🔍 Pod logs:"
         kubectl logs "$frontend_pod" --tail=10 || true
       }
     fi
     
-    # Test the actual URL with a proper API endpoint
+    # Test frontend API endpoint
     echo "🔍 Testing frontend API endpoint..."
-    timeout 60 bash -c "until curl -fsSL 'http://localhost:5000' >/dev/null 2>&1; do sleep 2; done" || {
+    timeout 30 bash -c "until curl -fsSL 'http://localhost:5000' >/dev/null 2>&1; do sleep 2; done" || {
       echo "❌ Frontend service not reachable after extended testing"
       echo "🔍 Final debugging info:"
       echo "Service status:"
-      kubectl get svc frontend -o wide
+      kubectl get svc frontend
       echo "Endpoints:"
       kubectl get endpoints frontend
       echo "🔍 Testing basic connectivity:"
       curl -v "http://localhost:5000" || true
       return 1
     }
-    echo "✅ Frontend service is ready!"
+    echo "✅ Frontend connectivity check completed"
   else
     echo "💀 Frontend service is killed for this round"
   fi
@@ -413,8 +498,47 @@ for round in $(seq 1 "$ROUNDS"); do
     errors=$total
   else
     echo "[Round $round] waiting for stack to be healthy..."
-    if ! wait_ready; then
-      echo "[Round $round] Frontend not ready, treating as all errors"
+    
+    # Try multiple times to get frontend ready (in case of dependency issues)
+    local max_attempts=3
+    local attempt=1
+    local frontend_ready=false
+    
+    while [[ $attempt -le $max_attempts ]] && [[ "$frontend_ready" == "false" ]]; do
+      echo "[Round $round] Frontend readiness attempt $attempt/$max_attempts"
+      
+      if wait_ready "$killed_services_file"; then
+        frontend_ready=true
+        echo "[Round $round] Frontend is ready!"
+        break
+      else
+        echo "[Round $round] Frontend not ready on attempt $attempt"
+        
+        if [[ $attempt -lt $max_attempts ]]; then
+          echo "[Round $round] Retrying frontend startup..."
+          # Restart frontend pod to retry initialization
+          kubectl delete pod -l io.kompose.service=frontend > /dev/null 2>&1 || true
+          sleep 15
+          
+          # Wait for new pod to be running
+          timeout 60 bash -c 'until kubectl get pods -l io.kompose.service=frontend --no-headers 2>/dev/null | grep -q "Running"; do sleep 2; done' || {
+            echo "[Round $round] Frontend pod failed to restart"
+          }
+          
+          # Restart port forwarding
+          pkill -f "kubectl.*port-forward.*frontend" || true
+          sleep 2
+          kubectl port-forward "service/frontend" "5000:5000" > /dev/null 2>&1 &
+          SERVICE_PIDS["frontend"]=$!
+          sleep 5
+        fi
+      fi
+      
+      ((attempt++))
+    done
+    
+    if [[ "$frontend_ready" == "false" ]]; then
+      echo "[Round $round] Frontend not ready after $max_attempts attempts, treating as all errors"
       total=$((RATE * DURATION))
       errors=$total
     else
