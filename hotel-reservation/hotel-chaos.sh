@@ -39,24 +39,66 @@ trap cleanup EXIT
 wait_ready() {
   echo "⏳ Waiting for frontend to be ready..."
   
-  # Wait for frontend pod
-  timeout 120 bash -c 'until kubectl get pods -l io.kompose.service=frontend --no-headers 2>/dev/null | grep -q "1/1.*Running"; do sleep 3; done' || {
-    echo "❌ Frontend pod not ready"
+  # Wait for frontend pod to be running
+  echo "⏳ Waiting for frontend pod..."
+  timeout 180 bash -c 'until kubectl get pods -l io.kompose.service=frontend --no-headers 2>/dev/null | grep -q "1/1.*Running"; do sleep 3; done' || {
+    echo "❌ Frontend pod not ready after timeout"
+    kubectl get pods -l io.kompose.service=frontend 2>/dev/null || echo "No frontend pods found"
     return 1
   }
   
-  # Setup port forwarding
+  # Give the application time to start inside the pod
+  echo "⏳ Allowing application startup time..."
+  sleep 20
+  
+  # Setup port forwarding with better error handling
+  echo "🔌 Setting up port forwarding..."
   pkill -f "kubectl.*port-forward.*frontend" 2>/dev/null || true
-  kubectl port-forward service/frontend ${FRONTEND_PORT}:5000 >/dev/null 2>&1 &
-  sleep 10
+  sleep 2
   
-  # Test connectivity
-  timeout 60 bash -c 'until curl -fsS '"$URL"' >/dev/null 2>&1; do sleep 2; done' || {
-    echo "❌ Frontend not accessible"
+  # Start port forwarding in background
+  kubectl port-forward service/frontend ${FRONTEND_PORT}:5000 >/dev/null 2>&1 &
+  local pf_pid=$!
+  sleep 5
+  
+  # Verify port forwarding is working
+  if ! kill -0 $pf_pid 2>/dev/null; then
+    echo "❌ Port forwarding process died, trying pod direct forwarding..."
+    local frontend_pod=$(kubectl get pods -l io.kompose.service=frontend -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+    if [[ -n "$frontend_pod" ]]; then
+      kubectl port-forward pod/$frontend_pod ${FRONTEND_PORT}:5000 >/dev/null 2>&1 &
+      sleep 5
+    else
+      echo "❌ No frontend pod found for direct forwarding"
+      return 1
+    fi
+  fi
+  
+  # Wait for port to be available
+  echo "⏳ Waiting for port to be available..."
+  timeout 30 bash -c 'until (echo >/dev/tcp/localhost/'"$FRONTEND_PORT"') 2>/dev/null; do sleep 1; done' || {
+    echo "❌ Port $FRONTEND_PORT not accessible"
+    echo "🔍 Checking port forwarding status..."
+    ps aux | grep "port-forward" | grep -v grep || echo "No port-forward processes running"
     return 1
   }
   
-  echo "✅ Frontend ready"
+  # Test HTTP connectivity with retries
+  echo "🔍 Testing HTTP connectivity..."
+  local attempts=0
+  local max_attempts=10
+  while [[ $attempts -lt $max_attempts ]]; do
+    if curl -fsS --max-time 5 "$URL" >/dev/null 2>&1; then
+      echo "✅ Frontend ready and accessible"
+      return 0
+    fi
+    ((attempts++))
+    echo "⏳ Attempt $attempts/$max_attempts failed, retrying..."
+    sleep 3
+  done
+  
+  echo "❌ Frontend not accessible after $max_attempts attempts"
+  return 1
 }
 
 # ─── Helper: run wrk and return total errors ──────────────────────────────
@@ -137,30 +179,48 @@ restart_stack() {
   cleanup
   kubectl delete -Rf kubernetes/ >/dev/null 2>&1 || true
   
-  # Wait for cleanup
-  timeout 60 bash -c 'while kubectl get pods --no-headers 2>/dev/null | grep -qE "(frontend|search|geo|profile|rate|recommendation|reservation|user)"; do sleep 2; done' || true
+  # Wait for cleanup to complete
+  echo "⏳ Waiting for cleanup to complete..."
+  timeout 90 bash -c 'while kubectl get pods --no-headers 2>/dev/null | grep -qE "(frontend|search|geo|profile|rate|recommendation|reservation|user)"; do sleep 2; done' || {
+    echo "⚠️ Some pods still exist after cleanup timeout"
+  }
   
   # Deploy fresh stack
+  echo "🚀 Deploying fresh stack..."
   kubectl apply -Rf kubernetes/ >/dev/null 2>&1
+  
+  # Wait a bit for initial deployment
+  sleep 15
   
   # Scale for replication mode
   if [[ "$MODE" == "repl" ]]; then
+    echo "📈 Scaling for replication mode..."
     local services=("frontend" "search" "geo" "profile" "rate" "recommendation" "reservation" "user")
     for service in "${services[@]}"; do
       kubectl scale deployment/"$service" --replicas=3 >/dev/null 2>&1 || true
     done
+    sleep 10
   fi
   
-  # Wait for deployments
-  echo "⏳ Waiting for deployments to be ready..."
-  local services=("frontend" "search" "geo" "profile" "rate" "recommendation" "reservation" "user")
-  for service in "${services[@]}"; do
-    kubectl wait --for=condition=available deployment/"$service" --timeout=120s >/dev/null 2>&1 || {
+  # Wait for critical services first (backend dependencies)
+  echo "⏳ Waiting for backend services..."
+  local backend_services=("search" "geo" "profile" "rate" "recommendation" "reservation" "user")
+  for service in "${backend_services[@]}"; do
+    echo "⏳ Waiting for $service..."
+    kubectl wait --for=condition=available deployment/"$service" --timeout=180s >/dev/null 2>&1 || {
       echo "⚠️ $service not ready within timeout"
     }
   done
   
-  sleep 10
+  # Wait for frontend last (depends on backends)
+  echo "⏳ Waiting for frontend..."
+  kubectl wait --for=condition=available deployment/frontend --timeout=180s >/dev/null 2>&1 || {
+    echo "⚠️ Frontend deployment not ready within timeout"
+  }
+  
+  # Additional wait for service mesh and dependencies to stabilize
+  echo "⏳ Allowing services to stabilize..."
+  sleep 20
 }
 
 echo "=== Hotel Reservation Chaos Test ($ROUNDS rounds, fail=$FAIL_FRACTION, seed=$SEED, mode=$MODE) ==="
@@ -178,6 +238,10 @@ for round in $(seq 1 "$ROUNDS"); do
   echo "[Round $round] waiting for stack to be healthy..."
   if ! wait_ready; then
     echo "[Round $round] Stack not ready, treating as system failure"
+    echo "[Round $round] Debug info:"
+    kubectl get pods -l io.kompose.service=frontend 2>/dev/null || echo "No frontend pods"
+    kubectl get svc frontend 2>/dev/null || echo "No frontend service"
+    ps aux | grep "port-forward" | grep -v grep || echo "No port-forward processes"
     total=$((RATE * DURATION))
     errors=$total
   else
