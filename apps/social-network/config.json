@@ -1,0 +1,13 @@
+{
+  "name": "social-network",
+  "front_url": "http://localhost:8080/index.html",
+  "wrk2": {
+    "script": "third_party/DeathStarBench/wrk2/scripts/social-network/mixed-workload-5xx.lua",
+    "threads": 2,
+    "connections": 64,
+    "duration": "30s",
+    "rate": 300
+  },
+  "compose_project": "dsb-social-network",
+  "replicas_file": "apps/social-network/replicas.json"
+}

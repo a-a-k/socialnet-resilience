@@ -1,231 +1,215 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15396047.svg)](https://doi.org/10.5281/zenodo.15396047)
+# SocialNet Resilience (DeathStarBench)
 
-# Social-Network Resilience
+Reproducible resilience experiments on **three** DeathStarBench (DSB) apps:
 
-This project is based on the [DeathStarBench SocialNetwork](https://github.com/delimitrou/DeathStarBench/tree/master/socialNetwork) benchmark, adapting its workload and service graph for resilience analysis.
+* **Social Network**
+* **Media Service**
+* **Hotel Reservation**
 
-This repository implements both theoretical and empirical evaluation of the resilience of a social-network microservices application under container failures. It includes:
+This repo measures resilience both **theoretically** (model on the live service graph) and **empirically** (chaos + 5xx/error‑aware workloads). Key properties:
 
-* **resilience.py**: Monte Carlo simulation of service outages using sampling without replacement.
-* **chaos.sh**: Script for injecting failures (killing containers) and measuring live request success rate.
-* **pipeline\_norepl.sh** / **pipeline\_repl.sh**: Combined workflows for scenarios without and with replicas.
-* **results**: Directory containing JSON summaries (`summary_norepl.json`, `summary_repl.json`).
-
----
-
-## Table of Contents
-
-1. [Prerequisites](#prerequisites)
-2. [Setup](#setup)
-3. [Dependency Graph](#dependency-graph)
-4. [Theoretical Model (resilience.py)](#theoretical-model-resiliencepy)
-5. [Empirical Test (chaos.sh)](#empirical-test-chaossh)
-6. [Pipeline Workflows](#pipeline-workflows)
-7. [Results](#results)
-8. [CI Integration](#ci-integration)
-9. [License](#license)
+* **Pinned DSB submodule** at `third_party/DeathStarBench` for reproducibility.
+* **Multi‑app** entrypoints that don’t break your original single‑app flow.
+* **Dynamic** dependency graph exported from **Jaeger** (`/api/dependencies`) at run time — no static deps are checked in.
+* **Priming** per app (SN + Media) before workloads are driven.
 
 ---
 
-## Prerequisites
+## Requirements
 
-* **Python 3.8+**
-* **Bash** (Unix-like environment)
-* **Docker & Docker Compose**
-* **jq** (JSON processor)
+* Docker & Docker Compose
+* Bash, `jq`
+* Python 3.8+ with:
 
-Recommended Python packages (installed via `pip`):
+  ```bash
+  python3 -m pip install --upgrade pip
+  pip install networkx numpy scipy
+  ```
+
+---
+
+## Clone (with submodules)
 
 ```bash
-pip install networkx numpy scipy
+git clone --recurse-submodules https://github.com/a-a-k/socialnet-resilience.git
+cd socialnet-resilience
+# If you forgot --recurse-submodules:
+git submodule update --init --recursive
 ```
 
-`jq` may be installed via your OS package manager (e.g., `apt install jq`).
+> The DSB code lives under `third_party/DeathStarBench` and is **pinned** to the SHA recorded in `third_party/DeathStarBench.COMMIT`. This keeps runs reproducible.
 
 ---
 
-## Setup
+## Quick start (multi‑app pipelines)
 
-1. **Clone this repository**:
+Each app has a small JSON config in `apps/<app>/config.json` that declares:
 
-   ```bash
-   git clone https://github.com/a-a-k/socialnet-resilience.git
-   cd socialnet-resilience
-   ```
+* the **frontend URL** to hit,
+* which **wrk2 script** to use,
+* a stable **compose project** name, and
+* (optionally) a **replica scale map** under `apps/<app>/replicas.json`.
 
-2. **Create & activate a virtual environment**:
+Run any app end‑to‑end:
 
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install --upgrade pip
-   pip install networkx numpy scipy
-   ```
+```bash
+# Social Network
+./pipeline_norepl_multi.sh social-network
+./pipeline_repl_multi.sh  social-network
 
-3. **Ensure `jq` is available**:
+# Media Service
+./pipeline_norepl_multi.sh media-service
+./pipeline_repl_multi.sh  media-service
 
-   ```bash
-   jq --version
-   ```
+# Hotel Reservation
+./pipeline_norepl_multi.sh hotel-reservation
+./pipeline_repl_multi.sh  hotel-reservation
+```
 
-## Dependency Graph
+Where results land:
 
-All service dependencies are defined in `deps.json` (Jaeger trace).
-The graph is loaded by `resilience.py` via NetworkX:
-
-```python
-with open('deps.json') as f:
-    data = json.load(f)['data']
-G = nx.DiGraph((e['parent'], e['child']) for e in data)
+```
+results/<app>/norepl/{wrk.txt, deps.json, R_avg_base.json, summary.json}
+results/<app>/repl/{  wrk.txt, deps.json, R_avg_repl.json, summary.json}
+results/<app>/summary_{norepl|repl}.json
 ```
 
 ---
 
-## Theoretical Model (`resilience.py`)
+## What the pipelines do
 
-Monte Carlo simulation of container failures without replacement.
+### 1) Prepare environment & prime data — `01_prepare_env_multi.sh`
 
-**Usage:**
+* Ensures the DSB submodule is present and builds **wrk2** if needed.
+* Starts the chosen app with a stable Compose project (`-p dsb-<app>`).
+* **Priming (idempotent):**
 
-```bash
-python3 resilience.py deps.json \
-  --samples 900000 \
-  --p_fail 0.30 \
-  [--repl 0|1] \
-  -o results/R_model_{repl|norepl}.json
-```
+  * **Social Network** – runs `scripts/init_social_graph.py` to register users + construct the social graph (required upstream).
+  * **Media Service** – runs `scripts/write_movie_info.py` and `scripts/register_users.sh` if TMDB JSONs exist in `mediaMicroservices/datasets/tmdb`.
+  * **Hotel Reservation** – no explicit seeding (works out‑of‑box).
 
-* `--repl`: enable replica counts (uses `replicas` map).
-* Output JSON fields:
+> Social Network uses your existing workload at `00_helpers/mixed-workload-5xx.lua`. We do **not** introduce another copy; the script is just installed into the submodule’s `wrk2/scripts/social-network/` path for execution.
 
-  * `R_avg`: weighted average availability.
-  * `R_ep`: per-endpoint availability.
+### 2) Steady‑state workload + model — `02_steady_norepl_multi.sh` / `04_steady_repl_multi.sh`
 
----
+* Drives wrk2 using the configured Lua script.
+* **Exports the live service graph** from Jaeger Query (`/api/dependencies?endTs=…&lookback=…`) into `results/<app>/<mode>/deps.json`.
+* Calls `resilience.py` on that **live** graph to compute the theoretical baseline:
 
-## Empirical Test (`chaos.sh`)
+  * `results/<app>/norepl/R_avg_base.json` (no replication)
+  * `results/<app>/repl/R_avg_repl.json` (replicated)
+* In `repl` mode, scales services using `apps/<app>/replicas.json` if present (Social Network is prefilled; Media/Hotel default to 1× unless you add entries).
 
-Docker Compose–based chaos experiment: kills a fraction of containers and measures successful HTTP requests.
+### 3) Chaos — `chaos_multi.sh`
 
-**Usage:**
+* Randomly kills ≈`P_FAIL` of containers **scoped to the app’s compose project** label.
+* Drives the same wrk2 workload and computes:
 
-```bash
-# Without replicas
-auth: # assume services are running via docker-compose
-./chaos.sh --repl 0 -o results/summary_norepl.json
+  ```
+  R_live = 1 - (Non-2xx/3xx responses + socket errors) / total
+  ```
 
-# With replicas
-auth:
-./chaos.sh --repl 1 -o results/summary_repl.json
-```
+  This works across apps without depending on app‑specific Lua hooks.
 
-* Output JSON field:
+### 4) Summaries
 
-  * `R_live`: observed success rate.
+* `results/<app>/summary_norepl.json` contains `{ R_model_norepl, R_live_norepl }`.
+* `results/<app>/summary_repl.json` contains `{ R_model_repl,  R_live_repl  }`.
 
 ---
 
-## Pipeline Workflows
+## App configuration (overview)
 
-Two separate pipelines collect theoretical and empirical results into a single summary file each.
+`apps/<app>/config.json` fields:
 
-### `pipeline_norepl.sh`
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Prepare environment
-./01_prepare_env.sh
-tests: ./02_steady_norepl.sh
-./chaos.sh --repl 0
-
-# Combine summaries
-jq -n \
-  --arg m "$(jq .R_avg  results/norepl/R_avg_base.json)" \
-  --arg l "$(jq .R_live results/norepl/summary.json)" \
-  '{R_model_norepl: ($m|tonumber), R_live_norepl: ($l|tonumber)}' \
-  > results/summary_norepl.json
-```
-
-### `pipeline_repl.sh`
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Prepare environment
-./01_prepare_env.sh
-./04_steady_repl.sh --repl 1
-./chaos.sh --repl 1
-
-# Combine summaries
-jq -n \
-  --arg m "$(jq .R_avg  results/repl/R_avg_repl.json)" \
-  --arg l "$(jq .R_live results/repl/summary.json)" \
-  '{R_model_repl: ($m|tonumber), R_live_repl: ($l|tonumber)}' \
-  > results/summary_repl.json
-```
-
-Each pipeline writes its combined summary to `results/summary_{norepl,repl}.json`.
-
----
-
-## Results
-
-After running a pipeline, inspect the combined summary:
-
-```bash
-cat results/summary_norepl.json
-# {
-#   "R_model_norepl": 0.179,
-#   "R_live_norepl": 0.193
-# }
-```
-
-Actual results for v1.0.0 release:
-
-
-[![v1.0.0 Artifact (norepl)](https://img.shields.io/badge/Artifact-v1.0.0-blue)](https://github.com/a-a-k/socialnet-resilience/actions/runs/14955221899/artifacts/3101768547) Without replication:
-
-```
+```json
 {
-  "R_model_norepl": 0.161,
-  "R_live_norepl": 0.1845
+  "name": "social-network",
+  "front_url": "http://localhost:8080/index.html",
+  "wrk2": {
+    "script": "third_party/DeathStarBench/wrk2/scripts/social-network/mixed-workload-5xx.lua",
+    "threads": 2,
+    "connections": 64,
+    "duration": "30s",
+    "rate": 300
+  },
+  "compose_project": "dsb-social-network",
+  "replicas_file": "apps/social-network/replicas.json"
 }
 ```
 
-[![v1.0.0 Artifact (repl)](https://img.shields.io/badge/Artifact-v1.0.0-blue)](https://github.com/a-a-k/socialnet-resilience/actions/runs/14955221900/artifacts/3101807581) With replication:
-
-```
-{
-  "R_model_repl": 0.305,
-  "R_live_repl": 0.3046
-}
-```
+* **front\_url** – complete URL used by wrk2.
+* **wrk2.script** – path inside the submodule; for Social Network we point to **your** `mixed-workload-5xx.lua` (placed there by the prepare step).
+* **compose\_project** – stable name used by Compose and by `chaos_multi.sh` to scope victim selection.
+* **replicas\_file** (optional) – a JSON map of service→replicas for the replicated scenario.
 
 ---
 
-## CI Integration
+## Dynamic dependency graph (Jaeger)
 
-In GitHub Actions, upload summaries as artifacts:
+We **do not** check in static service graphs. Each run exports the current dependency graph from Jaeger Query:
 
-```yaml
-- name: Run pipelines
-  run: |
-    ./pipeline_norepl.sh
-    ./pipeline_repl.sh
-
-- name: Upload summaries
-  uses: actions/upload-artifact@v3
-  with:
-    name: resilience-results
-    path: results/summary_*.json
 ```
+GET http://localhost:16686/api/dependencies?endTs=<ms_since_epoch>&lookback=<ms>
+```
+
+The export goes to `results/<app>/<mode>/deps.json` and is fed to `resilience.py` immediately after steady‑state load.
+
+> If your Jaeger is at a different URL/port, set `JAEGER=http://host:port` before running `*_multi.sh` scripts (they call `00_helpers/export_deps.sh` under the hood).
+
+---
+
+## Reproducibility
+
+* `third_party/DeathStarBench/` is a **git submodule**, pinned to the exact SHA recorded in `third_party/DeathStarBench.COMMIT`.
+* Always clone with `--recurse-submodules` or run:
+
+  ```bash
+  git submodule update --init --recursive
+  ```
+* You can deliberately update to a newer upstream commit later (normal submodule workflow).
+
+---
+
+## Advanced
+
+* **Customizing wrk2 parameters:** edit `apps/<app>/config.json` (`threads`, `connections`, `duration`, `rate`).
+* **Scaling in `repl` mode:** add entries to `apps/<app>/replicas.json`, e.g. for Social Network:
+
+  ```json
+  {
+    "default": 1,
+    "compose-post-service": 3,
+    "home-timeline-service": 3,
+    "user-timeline-service": 3,
+    "text-service": 3,
+    "media-service": 3
+  }
+  ```
+* **Legacy single‑app scripts:** your original `pipeline_norepl.sh`, `pipeline_repl.sh`, `chaos.sh` remain untouched and usable for the Social Network–only flow.
+
+---
+
+## Troubleshooting
+
+* **“Submodule folder looks empty”** – initialize it:
+
+  ```bash
+  git submodule update --init --recursive
+  ```
+* **Jaeger deps export is empty** – make sure the app has handled some requests first; the steady‑state step runs wrk2, so run the pipelines in order.
+* **Windows (CRLF)** – if you edit shell scripts on Windows, ensure LF endings and executable bit are preserved.
 
 ---
 
 ## License
 
-MIT License. See [LICENSE](./LICENSE) for details.
+MIT — see [LICENSE](./LICENSE).
 
+---
+
+**Notes**
+
+* Social Network priming uses `scripts/init_social_graph.py` (upstream‑recommended) before any load is applied.
+* Media Service priming uses `scripts/write_movie_info.py` and `scripts/register_users.sh` if `datasets/tmdb/{casts.json,movies.json}` are available.
+* Hotel Reservation runs out‑of‑the‑box without explicit seeding in most setups. If you add seeding scripts later, the prepare step can call them idempotently.

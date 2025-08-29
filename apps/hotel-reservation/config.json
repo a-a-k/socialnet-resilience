@@ -1,0 +1,13 @@
+{
+  "name": "hotel-reservation",
+  "front_url": "http://localhost:5000",
+  "wrk2": {
+    "script": "third_party/DeathStarBench/wrk2/scripts/hotel-reservation/mixed-workload_type_1.lua",
+    "threads": 2,
+    "connections": 64,
+    "duration": "30s",
+    "rate": 300
+  },
+  "compose_project": "dsb-hotel-reservation",
+  "replicas_file": "apps/hotel-reservation/replicas.json"
+}
