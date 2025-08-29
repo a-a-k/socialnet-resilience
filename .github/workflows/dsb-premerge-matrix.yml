@@ -1,0 +1,65 @@
+name: dsb-premerge-matrix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']        # запускается на любой ветке (в т.ч. до мержа)
+  pull_request:
+    branches: ['**']
+
+jobs:
+  run:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [social-network, media-service, hotel-reservation]
+        mode: [norepl, repl]
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Make scripts executable
+        run: |
+          chmod +x $(git ls-files '*.sh') || true
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python libs
+        run: |
+          python -m pip install --upgrade pip
+          pip install networkx numpy scipy
+
+      - name: Run multi-app pipeline
+        env:
+          APP: ${{ matrix.app }}
+          MODE: ${{ matrix.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "APP=$APP MODE=$MODE"
+          if [[ "$MODE" == "norepl" ]]; then
+            ./pipeline_norepl_multi.sh "$APP"
+          else
+            ./pipeline_repl_multi.sh  "$APP"
+          fi
+
+      - name: Upload summaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ matrix.app }}-${{ matrix.mode }}"
+          path: |
+            results/${{ matrix.app }}/summary_${{ matrix.mode }}.json
+            results/${{ matrix.app }}/${{ matrix.mode }}/*.json
+          if-no-files-found: error
