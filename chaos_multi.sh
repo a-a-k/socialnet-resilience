@@ -18,7 +18,7 @@ done
 
 CFG="apps/${APP}/config.json"
 COMPOSE_PROJECT="$(jq -r '.compose_project' "$CFG")"
-WRK="third_party/DeathStarBench/wrk2/wrk"
+WRK=wrk
 URL="$(jq -r '.front_url' "$CFG")"
 SCRIPT="$(jq -r '.wrk2.script' "$CFG")"
 T="$(jq -r '.wrk2.threads' "$CFG")"

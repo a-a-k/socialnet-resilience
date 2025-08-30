@@ -4,7 +4,7 @@ APP="${APP:-${1:-social-network}}"
 mkdir -p "results/${APP}/norepl"
 
 CFG="apps/${APP}/config.json"
-WRK="third_party/DeathStarBench/wrk2/wrk"
+WRK=wrk
 URL="$(jq -r '.front_url' "$CFG")"
 SCRIPT="$(jq -r '.wrk2.script' "$CFG")"
 T="$(jq -r '.wrk2.threads' "$CFG")"
