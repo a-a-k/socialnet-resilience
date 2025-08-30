@@ -46,7 +46,7 @@ fi
 mkdir -p "results/${APP}/$([[ "$REPL" -eq 1 ]] && echo repl || echo norepl)"
 LOG="$(mktemp)"
 set +e
-$WRK -D exp -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" >"$LOG" 2>&1
+$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" >"$LOG" 2>&1
 set -e
 
 # Prefer wrk's "X requests in"; else derive from duration*rate

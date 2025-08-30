@@ -13,7 +13,7 @@ D="$(jq -r '.wrk2.duration' "$CFG")"
 R="$(jq -r '.wrk2.rate' "$CFG")"
 
 echo "[steady-norepl] ${APP} -> ${URL}"
-$WRK -D exp -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" \
+$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" \
   | tee "results/${APP}/norepl/wrk.txt"
 
 # Export live deps from Jaeger, then model (no static deps committed)

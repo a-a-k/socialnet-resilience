@@ -30,7 +30,7 @@ if [[ -f "$REPLICAS_FILE" ]]; then
 fi
 
 echo "[steady-repl] ${APP} -> ${URL}"
-$WRK -D exp -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" \
+$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" \
   | tee "results/${APP}/repl/wrk.txt"
 
 DEPS="results/${APP}/repl/deps.json"

@@ -58,7 +58,7 @@ case "$APP" in
         python3 scripts/write_movie_info.py \
           -c datasets/tmdb/casts.json \
           -m datasets/tmdb/movies.json \
-          --server_address "127.0.0.1:8080"
+          --server_address "http://127.0.0.1:8080"
         bash scripts/register_users.sh
       else
         echo "[prime] TMDB dataset missing—skipping (safe)."
