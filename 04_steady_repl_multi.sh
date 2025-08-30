@@ -16,8 +16,6 @@ SEED="${SEED:-16}"
 CFG="apps/${APP}/config.json"
 URL="$(jq -r '.front_url' "$CFG")"
 SCRIPT="$(jq -r '.wrk2.script' "$CFG")"
-DEPS="results/${APP}/${MODE_DIR}/deps.json"
-./00_helpers/export_deps.sh --out "$DEPS"
 T="$(jq -r '.wrk2.threads' "$CFG")"
 C="$(jq -r '.wrk2.connections' "$CFG")"
 D="$(jq -r '.wrk2.duration' "$CFG")"
@@ -76,9 +74,14 @@ echo "primed..."
 echo "[steady-repl] waiting for frontend: ${URL}"
 timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
 
-echo "[steady-repl] ${APP} -> ${URL}"
+echo "[steady-repl] workload ${APP} -> ${URL}"
 $WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" \
   | tee "results/${APP}/${MODE_DIR}/wrk.txt"
+
+sleep 15
+
+DEPS="results/${APP}/${MODE_DIR}/deps.json"
+./00_helpers/export_deps.sh --out "$DEPS"
 
 python3 resilience.py --deps "$DEPS" --repl 1 \
   --app "$APP" \

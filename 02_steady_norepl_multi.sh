@@ -2,7 +2,6 @@
 set -euo pipefail
 
 echo "steady_norepl_multi is starting..."
-
 APP="${APP:-${1:-social-network}}"
 MODE_DIR="norepl"
 mkdir -p "results/${APP}/${MODE_DIR}"
@@ -17,8 +16,6 @@ SEED="${SEED:-16}"
 CFG="apps/${APP}/config.json"
 URL="$(jq -r '.front_url' "$CFG")"
 SCRIPT="$(jq -r '.wrk2.script' "$CFG")"
-DEPS="results/${APP}/${MODE_DIR}/deps.json"
-./00_helpers/export_deps.sh --out "$DEPS"
 T="$(jq -r '.wrk2.threads' "$CFG")"
 C="$(jq -r '.wrk2.connections' "$CFG")"
 D="$(jq -r '.wrk2.duration' "$CFG")"
@@ -32,7 +29,6 @@ DC="$(compose_cmd)"
 
 # Use one shared Jaeger override for all apps (if present)
 OVERRIDE="${OVERRIDE:-$(pwd)/overrides/jaeger.override.yml}"
-
 echo "configured..."
 
 # Bring the stack up (as in the original steady scripts)
@@ -76,9 +72,14 @@ echo "[steady-norepl] waiting for frontend: ${URL}"
 timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
 
 # Steady workload
-echo "[steady-norepl] ${APP} -> ${URL}"
+echo "[steady-norepl] workload ${APP} -> ${URL}"
 $WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" \
   | tee "results/${APP}/${MODE_DIR}/wrk.txt"
+
+sleep 15
+
+DEPS="results/${APP}/${MODE_DIR}/deps.json"
+./00_helpers/export_deps.sh --out "$DEPS"
 
 # Pass --app so resilience.py picks replicas.json for this app in repl runs
 python3 resilience.py --deps "$DEPS" --repl 0 \
