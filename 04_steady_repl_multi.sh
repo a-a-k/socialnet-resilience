@@ -27,7 +27,7 @@ REPLICAS_FILE="$(jq -r '.replicas_file' "$CFG")"
 source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
-OVERRIDE="${OVERRIDE:-$(pwd)/overrides/jaeger.override.yml}"
+OVERRIDE="$(override_for "$APP")"
 
 # Build --scale args from replicas.json (ignore "default")
 SCALE_ARGS=""

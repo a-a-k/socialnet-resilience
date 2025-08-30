@@ -19,3 +19,12 @@ compose_cmd() {
     echo "docker compose"
   fi
 }
+
+override_for() {
+  case "${1:-}" in
+    social-network)    echo "overrides/sn-jaeger.override.yml" ;;
+    media-service)     echo "overrides/ms-jaeger.override.yml" ;;
+    hotel-reservation) echo "overrides/hr-jaeger.override.yml" ;;
+    *) echo ""; return 1 ;;
+  esac
+}

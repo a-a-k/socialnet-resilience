@@ -2,6 +2,7 @@
 set -euo pipefail
 
 echo "steady_norepl_multi is starting..."
+
 APP="${APP:-${1:-social-network}}"
 MODE_DIR="norepl"
 mkdir -p "results/${APP}/${MODE_DIR}"
@@ -28,7 +29,8 @@ APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 
 # Use one shared Jaeger override for all apps (if present)
-OVERRIDE="${OVERRIDE:-$(pwd)/overrides/jaeger.override.yml}"
+OVERRIDE="$(override_for "$APP")"
+
 echo "configured..."
 
 # Bring the stack up (as in the original steady scripts)
