@@ -3,8 +3,6 @@ name: dsb-premerge-matrix
 on:
   workflow_dispatch:
   push:
-    branches: ['**']        # запускается на любой ветке (в т.ч. до мержа)
-  pull_request:
     branches: ['**']
 
 jobs:
@@ -20,7 +18,16 @@ jobs:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: recursive
+
+      - name: Init submodules
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          git submodule update --init --recursive --jobs 4
+          test -d third_party/DeathStarBench/socialNetwork
+          ls -la third_party/DeathStarBench | head
 
       - name: Make scripts executable
         run: |
