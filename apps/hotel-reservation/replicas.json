@@ -1,1 +1,11 @@
-{ "default": 1 }
+{
+  "default": 1,
+  "search": 3,
+  "recommendation": 3,
+  "geo": 3,
+  "rate": 3,
+  "profile": 3,
+  "user": 3,
+  "reservation": 3
+}
+

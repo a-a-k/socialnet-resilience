@@ -13,6 +13,8 @@ jobs:
       matrix:
         app: [social-network, media-service, hotel-reservation]
         mode: [norepl, repl]
+        fail: [ 0.1, 0.3, 0.5, 0.7, 0.9 ]
+        seed: [ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25 ]
 
     steps:
       - name: Checkout (with submodules)
@@ -71,6 +73,9 @@ jobs:
         env:
           APP: ${{ matrix.app }}
           MODE: ${{ matrix.mode }}
+          P_FAIL: ${{ matrix.fail }}
+          SEED: ${{ matrix.seed }}
+          ROUNDS: 450
         shell: bash
         run: |
           set -euo pipefail
@@ -84,7 +89,7 @@ jobs:
       - name: Upload summaries
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.app }}-${{ matrix.mode }}"
+          name: "${{ matrix.app }}-${{ matrix.mode }}-p${{ matrix.fail }}-seed${{ matrix.seed }}"
           path: |
             results/${{ matrix.app }}/summary_${{ matrix.mode }}.json
             results/${{ matrix.app }}/${{ matrix.mode }}/*.json

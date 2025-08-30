@@ -1,1 +1,13 @@
-{ "default": 1 }
+{
+  "default": 1,
+  "compose-review-service": 3,
+  "movie-id-service": 3,
+  "movie-info-service": 3,
+  "cast-info-service": 3,
+  "plot-service": 3,
+  "rating-service": 3,
+  "user-service": 3,
+  "unique-id-service": 3,
+  "review-storage-service": 3
+}
+
