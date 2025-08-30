@@ -21,12 +21,31 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Init submodules
+      - name: Ensure DeathStarBench present (submodule or pinned clone)
+        shell: bash
         run: |
           set -euo pipefail
-          git submodule sync --recursive
-          git submodule update --init --recursive --jobs 4
+          PIN="$(tr -d ' \n' < third_party/DeathStarBench.COMMIT || echo 6ecb09706140f8730b5385c08f1386c654c3c526)"
+          echo "PIN=$PIN"
+      
+          # 1) general init
+          if [[ -f .gitmodules ]] && grep -q 'third_party/DeathStarBench' .gitmodules; then
+            git submodule sync --recursive || true
+            git submodule update --init --recursive --jobs 4 || true
+          fi
+      
+          # 2) fallback: clone and checkout pinned SHA
+          if [[ ! -d third_party/DeathStarBench/.git || ! -d third_party/DeathStarBench/socialNetwork ]]; then
+            echo "Submodule not initialized, cloning pinned DeathStarBench…"
+            rm -rf third_party/DeathStarBench
+            git clone https://github.com/delimitrou/DeathStarBench.git third_party/DeathStarBench
+            git -C third_party/DeathStarBench checkout "$PIN"
+          fi
+      
+          # sanity-check
           test -d third_party/DeathStarBench/socialNetwork
+          test -d third_party/DeathStarBench/mediaMicroservices
+          test -d third_party/DeathStarBench/hotelReservation
           ls -la third_party/DeathStarBench | head
 
       - name: Make scripts executable
