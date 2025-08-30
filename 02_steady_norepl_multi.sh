@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "steady_norepl_multi is starting..."
+
 APP="${APP:-${1:-social-network}}"
 MODE_DIR="norepl"
 mkdir -p "results/${APP}/${MODE_DIR}"
@@ -31,6 +33,8 @@ DC="$(compose_cmd)"
 # Use one shared Jaeger override for all apps (if present)
 OVERRIDE="${OVERRIDE:-$(pwd)/overrides/jaeger.override.yml}"
 
+echo "configured..."
+
 # Bring the stack up (as in the original steady scripts)
 (
   cd "third_party/DeathStarBench/${APP_DIR}"
@@ -40,6 +44,8 @@ OVERRIDE="${OVERRIDE:-$(pwd)/overrides/jaeger.override.yml}"
     $DC -p "${COMPOSE_PROJECT}" up -d
   fi
 )
+
+echo "composed..."
 
 # Priming (same behavior as the original pipelines)
 case "$APP" in
@@ -63,6 +69,8 @@ case "$APP" in
     ;;
 esac
 
+echo "primed..."
+
 # Small readiness wait for the frontend
 echo "[steady-norepl] waiting for frontend: ${URL}"
 timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
@@ -77,3 +85,5 @@ python3 resilience.py --deps "$DEPS" --repl 0 \
   --app "$APP" \
   --p_fail "$P_FAIL" --seed "$SEED" --samples "$SAMPLES" \
   -o "results/${APP}/${MODE_DIR}/R_avg_base.json"
+
+echo "steady_norepl_multi finished."

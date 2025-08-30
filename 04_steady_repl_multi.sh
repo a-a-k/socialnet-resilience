@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "steady_repl_multi is starting..."
+
 APP="${APP:-${1:-social-network}}"
 MODE_DIR="repl"
 mkdir -p "results/${APP}/${MODE_DIR}"
@@ -35,6 +37,8 @@ if [[ -f "$REPLICAS_FILE" ]]; then
   SCALE_ARGS=$(jq -r 'to_entries | map(select(.key!="default") | "--scale \(.key)=\(.value)") | join(" ")' "$REPLICAS_FILE")
 fi
 
+echo "configured..."
+
 # Bring the scaled stack up (as original repl steady did)
 (
   cd "third_party/DeathStarBench/${APP_DIR}"
@@ -67,6 +71,8 @@ case "$APP" in
     ;;
 esac
 
+echo "primed..."
+
 echo "[steady-repl] waiting for frontend: ${URL}"
 timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
 
@@ -78,3 +84,5 @@ python3 resilience.py --deps "$DEPS" --repl 1 \
   --app "$APP" \
   --p_fail "$P_FAIL" --seed "$SEED" --samples "$SAMPLES" \
   -o "results/${APP}/${MODE_DIR}/R_avg_repl.json"
+
+echo "steady_repl_multi finished."
