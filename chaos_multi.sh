@@ -31,13 +31,17 @@ echo "[chaos] project=${COMPOSE_PROJECT}"
 # Kill ≈P_FAIL of containers in the selected compose project
 TARGETS=$(docker ps --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" -q)
 COUNT=$(echo "$TARGETS" | wc -w | xargs)
+export COUNT
+export P_FAIL
+
 KILL_N=$(python3 - <<PY
 import math, os
-n=int(os.environ.get("COUNT") or 0)
-p=float(os.environ["P_FAIL"])
+n = int(os.environ.get("COUNT", "0"))
+p = float(os.environ.get("P_FAIL", "0.30"))
 print(max(1, math.floor(n*p)) if n>0 else 0)
 PY
 )
+
 if [[ "$KILL_N" -gt 0 ]]; then
   echo "$TARGETS" | tr ' ' '\n' | shuf -n "$KILL_N" | xargs -r docker kill
 fi
