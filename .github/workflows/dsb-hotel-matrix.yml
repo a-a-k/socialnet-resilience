@@ -1,0 +1,83 @@
+name: dsb-hotel-matrix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+
+jobs:
+  run:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [norepl, repl]
+        fail: [0.1, 0.3, 0.5, 0.7, 0.9]
+        seed: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Ensure DeathStarBench present (submodule or pinned clone)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN="$(tr -d ' \n' < third_party/DeathStarBench.COMMIT || echo 6ecb09706140f8730b5385c08f1386c654c3c526)"
+          if [[ -f .gitmodules ]] && grep -q 'third_party/DeathStarBench' .gitmodules; then
+            git submodule sync --recursive || true
+            git submodule update --init --recursive --jobs 4 || true
+          fi
+          if [[ ! -d third_party/DeathStarBench/.git || ! -d third_party/DeathStarBench/hotelReservation ]]; then
+            rm -rf third_party/DeathStarBench
+            git clone https://github.com/delimitrou/DeathStarBench.git third_party/DeathStarBench
+            git -C third_party/DeathStarBench checkout "$PIN"
+          fi
+          test -d third_party/DeathStarBench/hotelReservation
+
+      - name: Make scripts executable
+        run: chmod +x $(git ls-files '*.sh') || true
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python libs
+        run: |
+          python -m pip install --upgrade pip
+          pip install aiohttp networkx numpy scipy
+
+      - name: Run multi-app pipeline (Hotel)
+        env:
+          APP: hotel-reservation
+          MODE: ${{ matrix.mode }}
+          P_FAIL: ${{ matrix.fail }}
+          SEED: ${{ matrix.seed }}
+          ROUNDS: 450
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$MODE" == "norepl" ]]; then
+            ./pipeline_norepl_multi.sh "$APP"
+          else
+            ./pipeline_repl_multi.sh  "$APP"
+          fi
+
+      - name: Upload summaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: "hotel-${{ matrix.mode }}-p${{ matrix.fail }}-seed${{ matrix.seed }}"
+          path: |
+            results/hotel-reservation/summary_${{ matrix.mode }}.json
+            results/hotel-reservation/${{ matrix.mode }}/*.json
+          if-no-files-found: error
