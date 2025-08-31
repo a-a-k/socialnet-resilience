@@ -158,7 +158,7 @@ for v in (random.sample(targets, min(k, len(targets))) if targets and k>0 else [
   (
     cd "third_party/DeathStarBench/${APP_DIR}"
     $DC -p "${COMPOSE_PROJECT}" down -v
-    $DC -p "${COMPOSE_PROJECT}" -f "$OVERRIDE" up -d ${SCALE_ARGS}
+    $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d ${SCALE_ARGS}
   )
   # Small readiness wait for the frontend
   timeout 30 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
