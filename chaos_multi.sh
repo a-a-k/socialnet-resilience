@@ -141,7 +141,7 @@ for v in (random.sample(targets, min(k, len(targets))) if targets and k>0 else [
   (
     cd "third_party/DeathStarBench/${APP_DIR}"
     $DC -p "${COMPOSE_PROJECT}" down -v
-    $DC -p "${COMPOSE_PROJECT}" up -d ${SCALE_ARGS} -f "$REPO_ROOT/overrides/jaeger.override.yml"
+    $DC -p "${COMPOSE_PROJECT}" -f "$REPO_ROOT/overrides/jaeger.override.yml" up -d ${SCALE_ARGS}
   )
   # Small readiness wait for the frontend
   timeout 30 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true

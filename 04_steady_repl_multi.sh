@@ -53,6 +53,7 @@ case "$APP" in
     (
       cd third_party/DeathStarBench/socialNetwork
       python3 scripts/init_social_graph.py --graph socfb-Reed98 --compose --ip 127.0.0.1 --port 8080
+      TARGET="${URL%/}/index.html"
     )
     ;;
   media-service)
@@ -62,10 +63,14 @@ case "$APP" in
         python3 scripts/write_movie_info.py -c datasets/tmdb/casts.json -m datasets/tmdb/movies.json --server_address "http://127.0.0.1:8080"
         bash scripts/register_users.sh
       fi
+      TARGET="${URL%/}/wrk2-api/review/compose"
     )
     ;;
   hotel-reservation)
-    :
+    TARGET="${URL%/}/tcp"
+    ;;
+  *)
+    TARGET="$URL"
     ;;
 esac
 
@@ -75,9 +80,9 @@ echo "[steady-repl] waiting for frontend: ${URL}"
 timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
 
 echo "[steady-repl] workload ${APP} -> ${URL}"
-$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" -R "$R" \
-  -- "$URL" \
-  "$URL" \
+# NOTE: we do NOT rely on lua args for base URL (scripts differ across DSB variants).
+# We pass the final TARGET to wrk so that scripts don't need a global 'url'.
+$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" -R "$R" "$TARGET" \
   | tee "results/${APP}/${MODE_DIR}/wrk.txt"
 
 sleep 15
