@@ -52,6 +52,9 @@ case "$APP" in
     ;;
 esac
 
+# Make override path absolute (repo-root based), so `cd` won't break it
+OVERRIDE="${REPO_ROOT}/${OVERRIDE}"
+
 # ---- helpers ----
 app_dir_for() {
   case "$1" in
@@ -90,6 +93,7 @@ error_sum=0
 
 for round in $(seq 1 "$ROUNDS"); do
   echo "[round $round/$ROUNDS] selecting victims…"
+  ROUND="$round"
 
   # Build list of killable app containers (exclude tracing/monitoring helpers)
   mapfile -t TARGETS < <(
