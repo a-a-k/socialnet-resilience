@@ -10,6 +10,10 @@ COMPOSE_PROJECT="$(jq -r '.compose_project' "$CFG")"
 git submodule update --init --recursive
 echo "[prepare] DSB pinned to $(tr -d ' \n' < third_party/DeathStarBench.COMMIT)"
 
+sudo apt-get update -qq
+sudo apt-get install -y jq bc git python3-venv lua-socket luarocks python3-scipy python3-pip > /dev/null 2>&1
+sudo luarocks install luasocket > /dev/null 2>&1
+
 # --- wrk2 engine install: $HOME/wrk2 -> /usr/local/bin/wrk ---
 WRK2_DIR="${WRK2_DIR:-$HOME/wrk2}"
 if [[ ! -x "$WRK2_DIR/wrk" ]]; then

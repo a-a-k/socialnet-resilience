@@ -73,45 +73,43 @@ error_sum=0
 for round in $(seq 1 "$ROUNDS"); do
   echo "[round $round/$ROUNDS] selecting victims…"
 
-  # Select only application containers of the target Compose project
-  TARGETS=$(docker ps \
-              --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
-              --format '{{.ID}} {{.Names}}' \
-            | grep -viE 'jaeger|prometheus|grafana|wrk' \
-            | awk '{print $1}')
+  # Build list of killable app containers (exclude tracing/monitoring helpers)
+  mapfile -t TARGETS < <(
+    docker ps \
+      --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
+      --format '{{.ID}} {{.Names}}' \
+    | grep -Ev '(^|[[:punct:]])(jaeger|jaeger-agent|grafana|prometheus|zipkin|otel|wrk|wrkbench)([[:punct:]]|$)' \
+    | awk '{print $1}'
+  )
 
-  COUNT=$(printf '%s\n' "$TARGETS" | sed '/^$/d' | wc -l | xargs)
-  export COUNT P_FAIL
-
-  # How many to kill: ceil(n * p_fail), min 1 when n>0
+  COUNT=${#TARGETS[@]}
+  # Compute how many to kill this round
   KILL_N=$(python3 - <<'PY'
 import math, os
-n = int(os.environ.get("COUNT","0"))
-p = float(os.environ.get("P_FAIL","0.30"))
-print(max(1, math.ceil(n*p)) if n>0 else 0)
+n=int(os.environ.get("COUNT","0"))
+p=float(os.environ.get("P_FAIL","0.30"))
+print(max(1, math.floor(n*p)) if n>0 else 0)
 PY
-)
+  )
 
-  # Deterministic victim selection using (SEED + round)
-  victims=""
-  if [[ "$KILL_N" -gt 0 && "$COUNT" -gt 0 ]]; then
-    export SEED round
-    victims=$(python3 - <<'PY' <<< "$TARGETS"
-import os,random,sys
-k_env = os.environ.get("KILL_N","")
-k = int(k_env) if k_env.isdigit() else 0
-seed = int(os.environ.get("SEED","16")) + int(os.environ.get("round","0") or "0")
+  # Deterministic sampling without replacement, read targets from stdin
+  export KILL_N SEED ROUND
+  victims=$(
+    printf '%s\n' "${TARGETS[@]}" | python3 -c '
+import os, sys, random
+targets=[l.strip() for l in sys.stdin if l.strip()]
+k=int(os.environ.get("KILL_N","0") or 0)
+seed=int(os.environ.get("SEED","16") or 16) + int(os.environ.get("ROUND","0") or 0)
 random.seed(seed)
-targets = [l.strip() for l in sys.stdin.read().splitlines() if l.strip()]
-if targets and k>0:
-    from random import sample
-    print("\n".join(sample(targets, min(k, len(targets)))))
-PY
-)
-    if [[ -n "$victims" ]]; then
-      printf '%s\n' "$victims" | tee "results/${APP}/${MODE_DIR}/killed_round_${round}.txt"
-      printf '%s\n' "$victims" | xargs -r docker kill || true
-    fi
+for v in (random.sample(targets, min(k, len(targets))) if targets and k>0 else []):
+    print(v)
+'
+  )
+
+  # Kill selected containers
+  if [[ -n "$victims" ]]; then
+    printf '%s\n' "$victims" | tee "results/${APP}/${MODE_DIR}/killed_round_${ROUND}.txt"
+    printf '%s\n' "$victims" | xargs -r docker kill
   fi
 
   # Drive workload
