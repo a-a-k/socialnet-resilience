@@ -27,8 +27,20 @@ REPLICAS_FILE="$(jq -r '.replicas_file' "$CFG")"
 source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
-OVERRIDE="$(override_for "$APP")"
 TARGET="$URL"
+
+# Resolve repo root and load helper functions (app_dir_for, compose_cmd, override_for)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1090
+source "$SCRIPT_DIR/00_helpers/app_paths.sh"
+
+# (optional) prove the function is actually loaded
+if ! declare -F override_for >/dev/null 2>&1; then
+  echo "[chaos] FATAL: override_for() not loaded from 00_helpers/app_paths.sh" >&2
+  exit 1
+fi
+
+OVERRIDE="$(override_for "$APP")"
 
 # Build --scale args from replicas.json (ignore "default")
 SCALE_ARGS=""

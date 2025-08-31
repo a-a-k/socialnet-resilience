@@ -27,6 +27,18 @@ COMPOSE_PROJECT="$(jq -r '.compose_project' "$CFG")"
 source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
+TARGET="$URL"
+
+# Resolve repo root and load helper functions (app_dir_for, compose_cmd, override_for)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1090
+source "$SCRIPT_DIR/00_helpers/app_paths.sh"
+
+# (optional) prove the function is actually loaded
+if ! declare -F override_for >/dev/null 2>&1; then
+  echo "[chaos] FATAL: override_for() not loaded from 00_helpers/app_paths.sh" >&2
+  exit 1
+fi
 
 # Use one shared Jaeger override for all apps (if present)
 OVERRIDE="$(override_for "$APP")"
