@@ -75,7 +75,9 @@ timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || tr
 
 # Steady workload
 echo "[steady-norepl] workload ${APP} -> ${URL}"
-$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" \
+$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" -R "$R" \
+  -- "$URL" \
+  "$URL" \
   | tee "results/${APP}/${MODE_DIR}/wrk.txt"
 
 sleep 15

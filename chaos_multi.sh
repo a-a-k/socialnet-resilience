@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Resolve repo root to avoid 'unbound variable' under `set -u`
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")" && pwd)}"
+# Make sure mode dir is set for artifact paths
+MODE_DIR="${MODE_DIR:-${MODE:-norepl}}"
+
 # ---- CLI / env ----
 APP="social-network"
 REPL=0
