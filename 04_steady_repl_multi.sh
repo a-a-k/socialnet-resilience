@@ -83,7 +83,7 @@ sleep 15
 DEPS="results/${APP}/${MODE_DIR}/deps.json"
 ./00_helpers/export_deps.sh --out "$DEPS"
 
-python3 resilience.py --deps "$DEPS" --repl 1 \
+python3 resilience.py "$DEPS" --repl 1 \
   --app "$APP" \
   --p_fail "$P_FAIL" --seed "$SEED" --samples "$SAMPLES" \
   -o "results/${APP}/${MODE_DIR}/R_avg_repl.json"

@@ -2,7 +2,7 @@
   "name": "hotel-reservation",
   "front_url": "http://localhost:5000",
   "wrk2": {
-    "script": "third_party/DeathStarBench/wrk2/scripts/hotel-reservation/mixed-workload_type_1.lua",
+    "script": "third_party/DeathStarBench/hotelReservation/wrk2/scripts/hotel-reservation/mixed-workload_type_1.lua",
     "threads": 2,
     "connections": 64,
     "duration": "30s",

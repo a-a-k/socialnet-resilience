@@ -2,7 +2,7 @@
   "name": "media-service",
   "front_url": "http://localhost:8080",
   "wrk2": {
-    "script": "third_party/DeathStarBench/wrk2/scripts/media-microservices/compose-review.lua",
+    "script": "third_party/DeathStarBench/mediaMicroservices/wrk2/scripts/media-microservices/compose-review.lua",
     "threads": 2,
     "connections": 64,
     "duration": "30s",

@@ -84,7 +84,7 @@ DEPS="results/${APP}/${MODE_DIR}/deps.json"
 ./00_helpers/export_deps.sh --out "$DEPS"
 
 # Pass --app so resilience.py picks replicas.json for this app in repl runs
-python3 resilience.py --deps "$DEPS" --repl 0 \
+python3 resilience.py "$DEPS" --repl 0 \
   --app "$APP" \
   --p_fail "$P_FAIL" --seed "$SEED" --samples "$SAMPLES" \
   -o "results/${APP}/${MODE_DIR}/R_avg_base.json"

@@ -2,7 +2,7 @@
   "name": "social-network",
   "front_url": "http://localhost:8080/index.html",
   "wrk2": {
-    "script": "third_party/DeathStarBench/wrk2/scripts/social-network/mixed-workload-5xx.lua",
+    "script": "00_helpers/mixed-workload-5xx.lua",
     "threads": 2,
     "connections": 64,
     "duration": "30s",
