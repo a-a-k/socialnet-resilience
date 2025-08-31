@@ -28,6 +28,7 @@ source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 OVERRIDE="$(override_for "$APP")"
+TARGET="$URL"
 
 # Build --scale args from replicas.json (ignore "default")
 SCALE_ARGS=""
