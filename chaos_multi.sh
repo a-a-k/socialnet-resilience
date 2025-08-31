@@ -13,6 +13,12 @@ OUT="results/${APP}/norepl/summary.json"
 P_FAIL="${P_FAIL:-0.30}"  # failure fraction (0..1)
 SEED="${SEED:-16}"        # base RNG seed
 ROUNDS="${ROUNDS:-450}"   # number of chaos rounds
+
+# Resolve repo root and load helper functions (app_dir_for, compose_cmd, override_for)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1090
+source "$SCRIPT_DIR/00_helpers/app_paths.sh"
+
 OVERRIDE="$(override_for "$APP")"
 
 WRK=wrk

@@ -34,12 +34,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1090
 source "$SCRIPT_DIR/00_helpers/app_paths.sh"
 
-# (optional) prove the function is actually loaded
-if ! declare -F override_for >/dev/null 2>&1; then
-  echo "[chaos] FATAL: override_for() not loaded from 00_helpers/app_paths.sh" >&2
-  exit 1
-fi
-
 OVERRIDE="$(override_for "$APP")"
 
 # Build --scale args from replicas.json (ignore "default")
@@ -91,6 +85,9 @@ echo "primed..."
 
 echo "[steady-repl] waiting for frontend: ${URL}"
 timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
+
+export LUA_INIT="url = \"$URL\""
+export LUA_INIT_5_1="$LUA_INIT"
 
 echo "[steady-repl] workload ${APP} -> ${URL}"
 # NOTE: we do NOT rely on lua args for base URL (scripts differ across DSB variants).

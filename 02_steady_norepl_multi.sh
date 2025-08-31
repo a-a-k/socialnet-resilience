@@ -34,12 +34,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1090
 source "$SCRIPT_DIR/00_helpers/app_paths.sh"
 
-# (optional) prove the function is actually loaded
-if ! declare -F override_for >/dev/null 2>&1; then
-  echo "[chaos] FATAL: override_for() not loaded from 00_helpers/app_paths.sh" >&2
-  exit 1
-fi
-
 # Use one shared Jaeger override for all apps (if present)
 OVERRIDE="$(override_for "$APP")"
 
@@ -76,7 +70,7 @@ case "$APP" in
         python3 scripts/write_movie_info.py -c datasets/tmdb/casts.json -m datasets/tmdb/movies.json --server_address "http://127.0.0.1:8080"
         bash scripts/register_users.sh
       fi
-      TARGET="${URL%/}/wrk2-api/review/compose"
+      TARGET="${URL%/}"
     )
     ;;
   hotel-reservation)
@@ -94,6 +88,9 @@ echo "[steady-norepl] waiting for frontend: ${URL}"
 timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
 
 # Steady workload
+export LUA_INIT="url = \"$URL\""
+export LUA_INIT_5_1="$LUA_INIT"
+
 echo "[steady-norepl] workload ${APP} -> ${URL}"
 # NOTE: we do NOT rely on lua args for base URL (scripts differ across DSB variants).
 # We pass the final TARGET to wrk so that scripts don't need a global 'url'.
