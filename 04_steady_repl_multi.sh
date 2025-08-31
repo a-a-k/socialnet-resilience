@@ -28,13 +28,18 @@ source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 TARGET="$URL"
-
-# Resolve repo root and load helper functions (app_dir_for, compose_cmd, override_for)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1090
-source "$SCRIPT_DIR/00_helpers/app_paths.sh"
-
-OVERRIDE="$(override_for "$APP")"
+OVERRIDE=""
+case "$APP" in
+  social-network)
+    OVERRIDE="overrides/sn-jaeger.override.yml"
+    ;;
+  media-service)
+    OVERRIDE="overrides/ms-jaeger.override.yml"
+    ;;
+  hotel-reservation)
+    OVERRIDE="overrides/hr-jaeger.override.yml"
+    ;;
+esac
 
 # Build --scale args from replicas.json (ignore "default")
 SCALE_ARGS=""
@@ -72,6 +77,7 @@ case "$APP" in
       fi
       TARGET="${URL%/}/wrk2-api/review/compose"
     )
+    SCRIPT="00_helpers/ms-compose-review.lua"
     ;;
   hotel-reservation)
     TARGET="${URL%/}/tcp"

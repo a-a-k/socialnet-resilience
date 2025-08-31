@@ -28,14 +28,18 @@ source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 TARGET="$URL"
-
-# Resolve repo root and load helper functions (app_dir_for, compose_cmd, override_for)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1090
-source "$SCRIPT_DIR/00_helpers/app_paths.sh"
-
-# Use one shared Jaeger override for all apps (if present)
-OVERRIDE="$(override_for "$APP")"
+OVERRIDE=""
+case "$APP" in
+  social-network)
+    OVERRIDE="overrides/sn-jaeger.override.yml"
+    ;;
+  media-service)
+    OVERRIDE="overrides/ms-jaeger.override.yml"
+    ;;
+  hotel-reservation)
+    OVERRIDE="overrides/hr-jaeger.override.yml"
+    ;;
+esac
 
 echo "configured..."
 
@@ -60,8 +64,8 @@ case "$APP" in
     (
       cd third_party/DeathStarBench/socialNetwork
       python3 scripts/init_social_graph.py --graph socfb-Reed98 --compose --ip 127.0.0.1 --port 8080
-      TARGET="${URL%/}/index.html"
     )
+    TARGET="${URL%/}/index.html"
     ;;
   media-service)
     (
@@ -70,8 +74,9 @@ case "$APP" in
         python3 scripts/write_movie_info.py -c datasets/tmdb/casts.json -m datasets/tmdb/movies.json --server_address "http://127.0.0.1:8080"
         bash scripts/register_users.sh
       fi
-      TARGET="${URL%/}"
     )
+    TARGET="${URL%/}"
+    SCRIPT="00_helpers/ms-compose-review.lua"
     ;;
   hotel-reservation)
     TARGET="${URL%/}/tcp"

@@ -14,13 +14,6 @@ P_FAIL="${P_FAIL:-0.30}"  # failure fraction (0..1)
 SEED="${SEED:-16}"        # base RNG seed
 ROUNDS="${ROUNDS:-450}"   # number of chaos rounds
 
-# Resolve repo root and load helper functions (app_dir_for, compose_cmd, override_for)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1090
-source "$SCRIPT_DIR/00_helpers/app_paths.sh"
-
-OVERRIDE="$(override_for "$APP")"
-
 WRK=wrk
 
 while [[ $# -gt 0 ]]; do
@@ -45,6 +38,19 @@ C="$(jq -r '.wrk2.connections' "$CFG")"
 D="$(jq -r '.wrk2.duration' "$CFG")"
 R="$(jq -r '.wrk2.rate' "$CFG")"
 REPLICAS_FILE="$(jq -r '.replicas_file' "$CFG")"
+OVERRIDE=""
+case "$APP" in
+  social-network)
+    OVERRIDE="overrides/sn-jaeger.override.yml"
+    ;;
+  media-service)
+    OVERRIDE="overrides/ms-jaeger.override.yml"
+    SCRIPT="00_helpers/ms-compose-review.lua"
+    ;;
+  hotel-reservation)
+    OVERRIDE="overrides/hr-jaeger.override.yml"
+    ;;
+esac
 
 # ---- helpers ----
 app_dir_for() {
