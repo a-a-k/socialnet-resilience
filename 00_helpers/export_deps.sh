@@ -27,7 +27,6 @@ mkdir -p "$(dirname "$OUT")"
 
 endTs=$(($(date +%s%N)/1000000))
 
-# пробуем несколько раз, пока в 'data' не появятся рёбра
 for i in $(seq 1 "$RETRIES"); do
   curl -fsS "${JAEGER}/api/dependencies?endTs=${endTs}&lookback=${LOOKBACK}" -o "$OUT" || true
   if jq -e '.data | length > 0' <"$OUT" >/dev/null 2>&1; then
