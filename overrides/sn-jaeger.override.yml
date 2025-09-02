@@ -8,3 +8,8 @@ services:
       # - "14268:14268"
     environment:
       - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+  networks:
+    default:
+      aliases:
+        - jaeger
+        - jaeger-agent

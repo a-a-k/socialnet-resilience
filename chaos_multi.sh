@@ -137,7 +137,7 @@ for v in (random.sample(targets, min(k, len(targets))) if targets and k>0 else [
   # Drive workload
   LOG="$(mktemp)"
   set +e
-  $WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" "$URL" -R "$R" >"$LOG" 2>&1
+  $WRK -t"$T" -c"$C" -d"$D" -s "$SCRIPT" "$URL" -R "$R" >"$LOG" 2>&1
   rc=$?
   set -e
 

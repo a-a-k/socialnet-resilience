@@ -4,7 +4,7 @@
   "wrk2": {
     "script": "00_helpers/mixed-workload-5xx.lua",
     "threads": 2,
-    "connections": 64,
+    "connections": 32,
     "duration": "30s",
     "rate": 300
   },

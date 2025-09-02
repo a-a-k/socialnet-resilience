@@ -98,8 +98,7 @@ export LUA_INIT_5_1="$LUA_INIT"
 echo "[steady-repl] workload ${APP} -> ${URL}"
 # NOTE: we do NOT rely on lua args for base URL (scripts differ across DSB variants).
 # We pass the final TARGET to wrk so that scripts don't need a global 'url'.
-$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" -R "$R" "$TARGET" \
-  | tee "results/${APP}/${MODE_DIR}/wrk.txt"
+$WRK -t"$T" -c"$C" -d"$D" -s "$SCRIPT" -R "$R" "$TARGET"
 
 sleep 15
 

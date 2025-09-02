@@ -4,7 +4,7 @@
   "wrk2": {
     "script": "third_party/DeathStarBench/mediaMicroservices/wrk2/scripts/media-microservices/compose-review.lua",
     "threads": 2,
-    "connections": 64,
+    "connections": 32,
     "duration": "30s",
     "rate": 300
   },

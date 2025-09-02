@@ -47,8 +47,10 @@ echo "configured..."
 (
   cd "third_party/DeathStarBench/${APP_DIR}"
   if [[ -f "$OVERRIDE" ]]; then
+    echo "overriding docker compose with OVERRIDE=$OVERRIDE ..."
     $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d
   else
+    echo "not overriding docker compose."
     $DC -p "${COMPOSE_PROJECT}" up -d
   fi
 )
@@ -99,13 +101,13 @@ export LUA_INIT_5_1="$LUA_INIT"
 echo "[steady-norepl] workload ${APP} -> ${URL}"
 # NOTE: we do NOT rely on lua args for base URL (scripts differ across DSB variants).
 # We pass the final TARGET to wrk so that scripts don't need a global 'url'.
-$WRK -t"$T" -c"$C" -d"$D" -L -s "$SCRIPT" -R "$R" "$TARGET" \
-  | tee "results/${APP}/${MODE_DIR}/wrk.txt"
+$WRK -t"$T" -c"$C" -d"$D" -s "$SCRIPT" -R "$R" "$TARGET"
 
 sleep 15
 
 DEPS="results/${APP}/${MODE_DIR}/deps.json"
-./00_helpers/export_deps.sh --out "$DEPS"
+ts=$(($(date +%s%N)/1000000))
+curl -s "http://localhost:16686/api/dependencies?endTs=$ts&lookback=3600000" -o "$DEPS"
 
 # Pass --app so resilience.py picks replicas.json for this app in repl runs
 python3 resilience.py "$DEPS" --repl 0 \

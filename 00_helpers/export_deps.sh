@@ -5,7 +5,7 @@ set -euo pipefail
 OUT=""
 JAEGER="${JAEGER:-http://localhost:16686}"
 LOOKBACK="${LOOKBACK:-3600000}"   # 1h
-RETRIES="${RETRIES:-12}"          # ~ 1 minute total с задержкой 5s
+RETRIES="${RETRIES:-5}"
 SLEEP_SEC="${SLEEP_SEC:-5}"
 
 while [[ $# -gt 0 ]]; do
@@ -28,7 +28,7 @@ mkdir -p "$(dirname "$OUT")"
 endTs=$(($(date +%s%N)/1000000))
 
 for i in $(seq 1 "$RETRIES"); do
-  curl -fsS "${JAEGER}/api/dependencies?endTs=${endTs}&lookback=${LOOKBACK}" -o "$OUT" || true
+  curl -s "${JAEGER}/api/dependencies?endTs=${endTs}&lookback=${LOOKBACK}" -o "$OUT"
   if jq -e '.data | length > 0' <"$OUT" >/dev/null 2>&1; then
     echo "[export_deps] wrote ${OUT} ($(jq '.data | length' "$OUT") edges)"
     exit 0
