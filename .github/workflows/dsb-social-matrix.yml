@@ -1,0 +1,85 @@
+name: dsb-social-matrix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+
+jobs:
+  run:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [norepl, repl]
+        fail: [0.1, 0.3, 0.5, 0.7, 0.9]
+        seed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Ensure DeathStarBench present (submodule or pinned clone)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN="$(cat third_party/DeathStarBench.COMMIT)"
+          if [[ ! -d third_party/DeathStarBench/.git ]]; then
+            echo "Submodule not initialized, cloning pinned DeathStarBench…"
+            rm -rf third_party/DeathStarBench
+            git clone https://github.com/delimitrou/DeathStarBench.git third_party/DeathStarBench
+            git -C third_party/DeathStarBench checkout "$PIN"
+          else
+            echo "Submodule initialized — syncing & updating…"
+            git submodule sync --recursive
+            git submodule update --init --recursive
+            git -C third_party/DeathStarBench checkout "$PIN"
+          fi
+          ls -la third_party/DeathStarBench | head
+
+      - name: Make scripts executable
+        run: chmod +x $(git ls-files '*.sh') || true
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python libs
+        run: |
+          python -m pip install --upgrade pip
+          pip install networkx numpy aiohttp scipy
+
+      - name: Run multi-app pipeline (Social)
+        env:
+          APP: social-network
+          MODE: ${{ matrix.mode }}
+          P_FAIL: ${{ matrix.fail }}
+          SEED: ${{ matrix.seed }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "APP=$APP MODE=$MODE P_FAIL=$P_FAIL SEED=$SEED"
+          if [[ "$MODE" == "norepl" ]]; then
+            ./pipeline_norepl_multi.sh "$APP"
+          else
+            ./pipeline_repl_multi.sh  "$APP"
+          fi
+
+      - name: Upload summaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: "social-${{ matrix.mode }}-p${{ matrix.fail }}-seed${{ matrix.seed }}"
+          path: |
+            results/social-network/summary_${{ matrix.mode }}.json
+            results/social-network/${{ matrix.mode }}/*.json
+          if-no-files-found: error
