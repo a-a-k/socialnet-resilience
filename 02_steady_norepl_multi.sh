@@ -28,7 +28,7 @@ source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 TARGET="$URL"
-OVERRIDE="overrides/docker-compose.override.yml"
+OVERRIDE="${REPO_ROOT}/overrides/docker-compose.override.yml"
 #case "$APP" in
 #  social-network)
 #    OVERRIDE="overrides/sn-jaeger.override.yml"
@@ -46,13 +46,7 @@ echo "configured..."
 # Bring the stack up (as in the original steady scripts)
 (
   cd "third_party/DeathStarBench/${APP_DIR}"
-  if [[ -f "$OVERRIDE" ]]; then
-    echo "overriding docker compose with OVERRIDE=$OVERRIDE ..."
-    $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d
-  else
-    echo "not overriding docker compose."
-    $DC -p "${COMPOSE_PROJECT}" up -d
-  fi
+  $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d
 )
 
 echo "composed..."
