@@ -28,18 +28,18 @@ source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 TARGET="$URL"
-OVERRIDE=""
-case "$APP" in
-  social-network)
-    OVERRIDE="overrides/sn-jaeger.override.yml"
-    ;;
-  media-service)
-    OVERRIDE="overrides/ms-jaeger.override.yml"
-    ;;
-  hotel-reservation)
-    OVERRIDE="overrides/hr-jaeger.override.yml"
-    ;;
-esac
+OVERRIDE="overrides/docker-compose.override.yml"
+#case "$APP" in
+#  social-network)
+#    OVERRIDE="overrides/sn-jaeger.override.yml"
+#    ;;
+#  media-service)
+#    OVERRIDE="overrides/ms-jaeger.override.yml"
+#    ;;
+#  hotel-reservation)
+#    OVERRIDE="overrides/hr-jaeger.override.yml"
+#    ;;
+#esac
 
 echo "configured..."
 
