@@ -38,17 +38,17 @@ C="$(jq -r '.wrk2.connections' "$CFG")"
 D="$(jq -r '.wrk2.duration' "$CFG")"
 R="$(jq -r '.wrk2.rate' "$CFG")"
 REPLICAS_FILE="$(jq -r '.replicas_file' "$CFG")"
-OVERRIDE=""
+OVERRIDE="${REPO_ROOT}/overrides/docker-compose.override.yml"
 case "$APP" in
   social-network)
-    OVERRIDE="overrides/sn-jaeger.override.yml"
+    #OVERRIDE="overrides/sn-jaeger.override.yml"
     ;;
   media-service)
-    OVERRIDE="overrides/ms-jaeger.override.yml"
+    #OVERRIDE="overrides/ms-jaeger.override.yml"
     SCRIPT="00_helpers/ms-compose-review.lua"
     ;;
   hotel-reservation)
-    OVERRIDE="overrides/hr-jaeger.override.yml"
+    #OVERRIDE="overrides/hr-jaeger.override.yml"
     ;;
 esac
 

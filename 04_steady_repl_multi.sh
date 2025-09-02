@@ -6,6 +6,7 @@ echo "steady_repl_multi is starting..."
 APP="${APP:-${1:-social-network}}"
 MODE_DIR="repl"
 mkdir -p "results/${APP}/${MODE_DIR}"
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")" && pwd)}"
 
 WRK=wrk
 
@@ -28,18 +29,7 @@ source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 TARGET="$URL"
-OVERRIDE=""
-case "$APP" in
-  social-network)
-    OVERRIDE="overrides/sn-jaeger.override.yml"
-    ;;
-  media-service)
-    OVERRIDE="overrides/ms-jaeger.override.yml"
-    ;;
-  hotel-reservation)
-    OVERRIDE="overrides/hr-jaeger.override.yml"
-    ;;
-esac
+OVERRIDE="${REPO_ROOT}/overrides/docker-compose.override.yml"
 
 # Build --scale args from replicas.json (ignore "default")
 SCALE_ARGS=""
@@ -48,15 +38,9 @@ if [[ -f "$REPLICAS_FILE" ]]; then
 fi
 
 echo "configured..."
-
-# Bring the scaled stack up (as original repl steady did)
 (
   cd "third_party/DeathStarBench/${APP_DIR}"
-  if [[ -f "$OVERRIDE" ]]; then
-    $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d ${SCALE_ARGS}
-  else
-    $DC -p "${COMPOSE_PROJECT}" up -d ${SCALE_ARGS}
-  fi
+  $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d
 )
 
 # Priming (same behavior as the original pipelines)
@@ -103,7 +87,8 @@ $WRK -t"$T" -c"$C" -d"$D" -s "$SCRIPT" -R "$R" "$TARGET"
 sleep 15
 
 DEPS="results/${APP}/${MODE_DIR}/deps.json"
-./00_helpers/export_deps.sh --out "$DEPS"
+ts=$(($(date +%s%N)/1000000))
+curl -s "http://localhost:16686/api/dependencies?endTs=$ts&lookback=3600000" -o "$DEPS"
 
 python3 resilience.py "$DEPS" --repl 1 \
   --app "$APP" \
