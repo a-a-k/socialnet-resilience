@@ -6,7 +6,7 @@ echo "steady_norepl_multi is starting..."
 APP="${APP:-${1:-social-network}}"
 MODE_DIR="norepl"
 mkdir -p "results/${APP}/${MODE_DIR}"
-
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")" && pwd)}"
 # Resolve wrk2 from PATH (allow override via env)
 WRK=wrk
 
