@@ -7,6 +7,8 @@ APP="${APP:-${1:-social-network}}"
 MODE_DIR="repl"
 mkdir -p "results/${APP}/${MODE_DIR}"
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")" && pwd)}"
+JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16686}"
+#JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6831}"
 
 WRK=wrk
 
@@ -88,7 +90,7 @@ sleep 15
 
 DEPS="results/${APP}/${MODE_DIR}/deps.json"
 ts=$(($(date +%s%N)/1000000))
-curl -s "http://localhost:16686/api/dependencies?endTs=$ts&lookback=3600000" -o "$DEPS"
+curl -s "http://localhost:${JAEGER_HTTP_PORT}/api/dependencies?endTs=$ts&lookback=3600000" -o "$DEPS"
 
 python3 resilience.py "$DEPS" --repl 1 \
   --app "$APP" \

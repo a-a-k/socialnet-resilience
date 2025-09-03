@@ -10,6 +10,9 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")" && pwd)}"
 # Resolve wrk2 from PATH (allow override via env)
 WRK=wrk
 
+JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16686}"
+#JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6831}"
+
 # Load per-app config
 SAMPLES="${SAMPLES:-500000}"
 P_FAIL="${P_FAIL:-0.30}"
@@ -92,7 +95,6 @@ DEPS="results/${APP}/${MODE_DIR}/deps.json"
 ts=$(($(date +%s%N)/1000000))
 curl -s "http://localhost:${JAEGER_HTTP_PORT}/api/dependencies?endTs=$ts&lookback=3600000" -o "$DEPS"
 
-# Pass --app so resilience.py picks replicas.json for this app in repl runs
 python3 resilience.py "$DEPS" --repl 0 \
   --app "$APP" \
   --p_fail "$P_FAIL" --seed "$SEED" --samples "$SAMPLES" \
