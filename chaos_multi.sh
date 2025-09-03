@@ -138,6 +138,7 @@ for v in (random.sample(targets, min(k, len(targets))) if targets and k>0 else [
   if [[ -z "$total" ]]; then
     dur=$(echo "$D" | sed 's/s$//'); total=$(( dur * R ))
   fi
+
   non23=$(awk -F': ' '/^Non-2xx or 3xx responses:/ {print $2}' "$LOG" | tail -1); non23=${non23:-0}
   sock=$(awk '/^Socket errors:/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/) s+=$i} END{print s+0}' "$LOG")
   errs=$(( non23 + sock ))
@@ -150,7 +151,11 @@ for v in (random.sample(targets, min(k, len(targets))) if targets and k>0 else [
   (
     cd "third_party/DeathStarBench/${APP_DIR}"
     $DC -p "${COMPOSE_PROJECT}" down -v
-    $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d "$SCALE_ARGS"
+    if [[ "$REPL" -eq 1 ]]; then
+      $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d ${SCALE_ARGS}
+    else
+      $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d
+    fi
   )
 done
 
