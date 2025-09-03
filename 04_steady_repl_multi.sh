@@ -40,7 +40,7 @@ fi
 echo "configured..."
 (
   cd "third_party/DeathStarBench/${APP_DIR}"
-  $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d
+  $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d "$SCALE_ARGS"
 )
 
 # Priming (same behavior as the original pipelines)

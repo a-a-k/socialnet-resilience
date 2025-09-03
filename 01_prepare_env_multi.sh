@@ -3,9 +3,13 @@ set -euo pipefail
 
 APP="${APP:-${1:-social-network}}"
 CFG="apps/${APP}/config.json"
-
 FRONT_URL="$(jq -r '.front_url' "$CFG")"
-COMPOSE_PROJECT="$(jq -r '.compose_project' "$CFG")"
+case "$APP" in
+  social-network)  JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16686}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6831}" ;;
+  media-service)   JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16687}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6832}" ;;
+  hotel-reservation) JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16688}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6833}" ;;
+esac
+export JAEGER_HTTP_PORT JAEGER_UDP_PORT
 
 git submodule update --init --recursive
 echo "[prepare] DSB pinned to $(tr -d ' \n' < third_party/DeathStarBench.COMMIT)"

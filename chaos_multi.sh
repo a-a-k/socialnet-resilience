@@ -13,7 +13,6 @@ OUT="results/${APP}/norepl/summary.json"
 P_FAIL="${P_FAIL:-0.30}"  # failure fraction (0..1)
 SEED="${SEED:-16}"        # base RNG seed
 ROUNDS="${ROUNDS:-450}"   # number of chaos rounds
-
 WRK=wrk
 
 while [[ $# -gt 0 ]]; do
@@ -40,20 +39,10 @@ R="$(jq -r '.wrk2.rate' "$CFG")"
 REPLICAS_FILE="$(jq -r '.replicas_file' "$CFG")"
 OVERRIDE="${REPO_ROOT}/overrides/docker-compose.override.yml"
 case "$APP" in
-  social-network)
-    #OVERRIDE="overrides/sn-jaeger.override.yml"
-    ;;
   media-service)
-    #OVERRIDE="overrides/ms-jaeger.override.yml"
     SCRIPT="00_helpers/ms-compose-review.lua"
     ;;
-  hotel-reservation)
-    #OVERRIDE="overrides/hr-jaeger.override.yml"
-    ;;
 esac
-
-# Make override path absolute (repo-root based), so `cd` won't break it
-OVERRIDE="${REPO_ROOT}/${OVERRIDE}"
 
 # ---- helpers ----
 app_dir_for() {
@@ -131,7 +120,10 @@ for v in (random.sample(targets, min(k, len(targets))) if targets and k>0 else [
   # Kill selected containers
   if [[ -n "$victims" ]]; then
     printf '%s\n' "$victims" | tee "results/${APP}/${MODE_DIR}/killed_round_${ROUND}.txt"
-    printf '%s\n' "$victims" | xargs -r docker kill
+    while read -r id; do
+      docker update --restart=no "$id" >/dev/null 2>&1 || true
+      docker kill "$id" >/dev/null 2>&1 || true
+    done <<< "$victims"
   fi
 
   # Drive workload
@@ -158,10 +150,8 @@ for v in (random.sample(targets, min(k, len(targets))) if targets and k>0 else [
   (
     cd "third_party/DeathStarBench/${APP_DIR}"
     $DC -p "${COMPOSE_PROJECT}" down -v
-    $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d ${SCALE_ARGS}
+    $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d "$SCALE_ARGS"
   )
-  # Small readiness wait for the frontend
-  timeout 30 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
 done
 
 # Aggregate R_live over all rounds

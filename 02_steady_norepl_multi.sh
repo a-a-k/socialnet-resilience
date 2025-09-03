@@ -29,17 +29,6 @@ APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 TARGET="$URL"
 OVERRIDE="${REPO_ROOT}/overrides/docker-compose.override.yml"
-#case "$APP" in
-#  social-network)
-#    OVERRIDE="overrides/sn-jaeger.override.yml"
-#    ;;
-#  media-service)
-#    OVERRIDE="overrides/ms-jaeger.override.yml"
-#    ;;
-#  hotel-reservation)
-#    OVERRIDE="overrides/hr-jaeger.override.yml"
-#    ;;
-#esac
 
 echo "configured..."
 
@@ -101,7 +90,7 @@ sleep 15
 
 DEPS="results/${APP}/${MODE_DIR}/deps.json"
 ts=$(($(date +%s%N)/1000000))
-curl -s "http://localhost:16686/api/dependencies?endTs=$ts&lookback=3600000" -o "$DEPS"
+curl -s "http://localhost:${JAEGER_HTTP_PORT}/api/dependencies?endTs=$ts&lookback=3600000" -o "$DEPS"
 
 # Pass --app so resilience.py picks replicas.json for this app in repl runs
 python3 resilience.py "$DEPS" --repl 0 \
