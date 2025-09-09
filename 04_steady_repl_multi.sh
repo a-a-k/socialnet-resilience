@@ -7,8 +7,6 @@ APP="${APP:-${1:-social-network}}"
 MODE_DIR="repl"
 mkdir -p "results/${APP}/${MODE_DIR}"
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")" && pwd)}"
-JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16686}"
-#JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6831}"
 
 WRK=wrk
 
@@ -31,6 +29,15 @@ source 00_helpers/app_paths.sh
 APP_DIR="$(app_dir_for "$APP")"
 DC="$(compose_cmd)"
 TARGET="$URL"
+
+# choose per-app Jaeger ports (unique per app)
+case "$APP" in
+  social-network)  JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16686}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6831}" ;;
+  media-service)   JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16687}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6832}" ;;
+  hotel-reservation) JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16688}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6833}" ;;
+esac
+export JAEGER_HTTP_PORT JAEGER_UDP_PORT
+
 OVERRIDE="${REPO_ROOT}/overrides/docker-compose.override.yml"
 
 # Build --scale args from replicas.json (ignore "default")

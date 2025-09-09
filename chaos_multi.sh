@@ -2,15 +2,15 @@
 # -------------------------------------------------------------------
 # Usage examples:
 #   # Social Network (default app), no replication
-#   ./chaos_unified.sh
+#   ./chaos_multi.sh
 #
 #   # Any app declared under apps/<app>/config.json (restructured branch)
-#   ./chaos_unified.sh --app media-service
-#   ./chaos_unified.sh --app hotel-reservation --repl
+#   ./chaos_multi.sh --app media-service
+#   ./chaos_multi.sh --app hotel-reservation --repl
 #
 #   # Override tunables via env or flags (take precedence over app config)
-#   RATE=500 DURATION=45 THREADS=4 CONNS=128 ./chaos_unified.sh --app social-network
-#   ./chaos_unified.sh --rate 500 --duration 45 --threads 4 --conns 128
+#   RATE=500 DURATION=45 THREADS=4 CONNS=128 ./chaos_multi.sh --app social-network
+#   ./chaos_multi.sh --rate 500 --duration 45 --threads 4 --conns 128
 #
 # Output:
 #   results/<app>/<mode>/summary.json  with {"rounds": N, "R_live": <0..1>}
@@ -272,6 +272,14 @@ for round in $(seq 1 "$ROUNDS"); do
 
   echo "[Round $round] restarting stack..."
   (
+    # choose per-app Jaeger ports (unique per app)
+    case "$APP" in
+      social-network)  JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16686}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6831}" ;;
+      media-service)   JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16687}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6832}" ;;
+      hotel-reservation) JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16688}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6833}" ;;
+    esac
+    export JAEGER_HTTP_PORT JAEGER_UDP_PORT
+
     cd "${DSB_DIR}/${APP_DIR}"
     $DC -p "${COMPOSE_PROJECT}" down -v >/dev/null
     if [[ "$REPL_FLAG" -eq 1 && -n "${SCALE_ARGS}" ]]; then
