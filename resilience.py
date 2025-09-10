@@ -79,7 +79,7 @@ EXPLICIT_TARGETS = {
     },
 
     "media-service": {
-        "client": "nginx-web-server",
+        "client": "nginx",
         "endpoints": {
             # Compose a movie review (POST /wrk2-api/review/compose)
             # Services involved according to the compose-review path.
