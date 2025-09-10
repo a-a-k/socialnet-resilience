@@ -4,7 +4,7 @@ APP="${APP:-${1:-social-network}}"
 
 ./01_prepare_env_multi.sh "$APP"
 ./04_steady_repl_multi.sh "$APP"
-./chaos_multi.sh --app "$APP" --repl 1 -o "results/${APP}/repl/summary.json"
+./chaos_multi.sh --app "$APP" --repl 1 -o "results/${APP}/repl"
 
 jq -n \
   --arg m "$(jq .R_avg  "results/${APP}/repl/R_avg_repl.json")" \
