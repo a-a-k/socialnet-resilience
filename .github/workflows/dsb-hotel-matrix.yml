@@ -2,8 +2,8 @@ name: dsb-hotel-matrix
 
 on:
   workflow_dispatch:
- # push:
-  #  branches: ['**']
+  push:
+    branches: ['**']
 
 jobs:
   run:
