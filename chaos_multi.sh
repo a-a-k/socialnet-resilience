@@ -155,7 +155,7 @@ echo "[wrk] url=${URL} lua=${LUA} rate=${RATE} dur=${DURATION_STR} threads=${THR
 # ─── Helpers ─────────────────────────────────────────────────────────────
 wait_ready() {
   # wait until the frontend is reachable (give up after ~15s)
-  timeout 15 bash -c \
+  timeout 20 bash -c \
     'until curl -fsS '"$URL"' >/dev/null 2>&1; do sleep 0.3; done' || true
 }
 
@@ -177,35 +177,15 @@ run_wrk() {
     # frontend fully down or wrk misparsed: assume all failed
     total="$expected_total"
     errors="$total"
-    # DEBUG: write breakdown
-    if [[ "${DEBUG:-1}" -eq 1 ]]; then
-      local dbg="${logfile%.log}.dbg.tsv"
-      echo -e "metric\tvalue" > "$dbg"
-      echo -e "total\t${total}" >> "$dbg"
-      echo -e "http_5xx\t${errors}" >> "$dbg"
-      echo -e "sock_connect\t0" >> "$dbg"
-      echo -e "sock_read\t0" >> "$dbg"
-      echo -e "sock_write\t0" >> "$dbg"
-      echo -e "sock_timeout\t0" >> "$dbg"
-      echo -e "errors_total\t${errors}" >> "$dbg"
-    fi
     echo "$total $errors"
     return
   fi
 
-  # Parse errors from Status Code Summary (match chaos.sh): only Status 5xx + socket errors
-  errors=0
-  local http5xx=0 http4xx=0 http2xx=0
-  if grep -qE "Status 5xx:[[:space:]]+" "$logfile"; then
-    http5xx="$(grep -E "Status 5xx:[[:space:]]+[0-9]+" "$logfile" | awk '{print $NF}')"
-    errors="$http5xx"
-  fi
-  # Optionally capture 2xx/4xx for diagnostics (not used in errors)
-  if grep -qE "Status 2xx:[[:space:]]+" "$logfile"; then
-    http2xx="$(grep -E "Status 2xx:[[:space:]]+[0-9]+" "$logfile" | awk '{print $NF}')"
-  fi
-  if grep -qE "Status 4xx:[[:space:]]+" "$logfile"; then
-    http4xx="$(grep -E "Status 4xx:[[:space:]]+[0-9]+" "$logfile" | awk '{print $NF}')"
+  # Only server-side failures (5xx) count as errors; ignore 4xx statuses.
+  if grep -qE '^Status 5xx:[[:space:]]+[0-9]+' "$logfile"; then
+    errors="$(awk '/^Status 5xx:/ {print $NF; exit}' "$logfile")"
+  else
+    errors="0"
   fi
 
   # Socket errors: mirror chaos.sh implementation, and also break down components for debug
@@ -224,21 +204,6 @@ run_wrk() {
   [[ "$total"  =~ ^[0-9]+$ ]] || total="$expected_total"
   [[ "$errors" =~ ^[0-9]+$ ]] || errors=0
 
-  # DEBUG: write breakdown file
-  if [[ "${DEBUG:-1}" -eq 1 ]]; then
-    local dbg="${logfile%.log}.dbg.tsv"
-    echo -e "metric\tvalue" > "$dbg"
-    echo -e "total\t${total}" >> "$dbg"
-    echo -e "http_2xx\t${http2xx}" >> "$dbg"
-    echo -e "http_4xx\t${http4xx}" >> "$dbg"
-    echo -e "http_5xx\t${http5xx}" >> "$dbg"
-    echo -e "sock_connect\t${sock_connect}" >> "$dbg"
-    echo -e "sock_read\t${sock_read}" >> "$dbg"
-    echo -e "sock_write\t${sock_write}" >> "$dbg"
-    echo -e "sock_timeout\t${sock_timeout}" >> "$dbg"
-    echo -e "errors_total\t${errors}" >> "$dbg"
-  fi
-
   echo "$total $errors"
 }
 
@@ -246,13 +211,14 @@ random_kill() {
   # Kill a deterministic random subset of *business* containers for this app.
   local fraction="$1" ; local round="$2"
 
-  # Use docker compose ps within the app directory; exclude monitoring/helper containers (match chaos.sh)
+  # Scope to the app's compose project; exclude monitoring helpers, wrk, and frontends
   mapfile -t containers < <(
     (
       cd "${DSB_DIR}/${APP_DIR}" && \
       $DC -p "${COMPOSE_PROJECT}" ps --format '{{.ID}} {{.Name}}'
     ) \
     | grep -Ev '(^|[[:punct:]])(frontend|jaeger|jaeger-agent|grafana|prometheus|zipkin|otel|wrk|wrkbench)([[:punct:]]|$)' \
+    | grep -Ev '(-nginx-web-server-[0-9]+$|-nginx-[0-9]+$|-frontend-[0-9]+$)' \
     | awk '{print $1}'
   )
 
@@ -285,6 +251,24 @@ error_sum=0
 
 for round in $(seq 1 "$ROUNDS"); do
   echo "-- round $round/$ROUNDS --"
+  echo "starting stack... "
+  (
+    # choose per-app Jaeger ports (unique per app)
+    case "$APP" in
+      social-network)  JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16686}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6831}" ;;
+      media-service)   JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16687}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6832}" ;;
+      hotel-reservation) JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16688}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6833}" ;;
+    esac
+    export JAEGER_HTTP_PORT JAEGER_UDP_PORT
+
+    cd "${DSB_DIR}/${APP_DIR}"
+    if [[ "$REPL_FLAG" -eq 1 && -n "${SCALE_ARGS}" ]]; then
+      $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d ${SCALE_ARGS} --wait >/dev/null
+    else
+      $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d --wait >/dev/null
+    fi
+  )
+
   echo "[Round $round] waiting for stack to be healthy..."
   wait_ready
   echo "[Round $round] stack is healthy."
@@ -323,25 +307,12 @@ PY
     echo "[Round $round] --- end wrk log ---"
   fi
 
-  echo "[Round $round] restarting stack..."
+  echo "[Round $round] down stack..."
   (
-    # choose per-app Jaeger ports (unique per app)
-    case "$APP" in
-      social-network)  JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16686}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6831}" ;;
-      media-service)   JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16687}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6832}" ;;
-      hotel-reservation) JAEGER_HTTP_PORT="${JAEGER_HTTP_PORT:-16688}"; JAEGER_UDP_PORT="${JAEGER_UDP_PORT:-6833}" ;;
-    esac
-    export JAEGER_HTTP_PORT JAEGER_UDP_PORT
-
     cd "${DSB_DIR}/${APP_DIR}"
     $DC -p "${COMPOSE_PROJECT}" down -v >/dev/null
-    if [[ "$REPL_FLAG" -eq 1 && -n "${SCALE_ARGS}" ]]; then
-      $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d ${SCALE_ARGS} >/dev/null
-    else
-      $DC -p "${COMPOSE_PROJECT}" -f docker-compose.yml -f "$OVERRIDE" up -d >/dev/null
-    fi
   )
-  echo "[Round $round] stack restarted."
+  echo "[Round $round] stack stopped."
 
   ((rounds++)) || true
   ((total_sum+=total)) || true
