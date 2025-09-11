@@ -172,7 +172,7 @@ run_wrk() {
   set -e
 
   if grep -q 'requests in' "$logfile"; then
-    total="$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')"
+    total="$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}' | tail -1)"
   else
     # frontend fully down or wrk misparsed: assume all failed
     total="$expected_total"
@@ -252,7 +252,7 @@ random_kill() {
       cd "${DSB_DIR}/${APP_DIR}" && \
       $DC -p "${COMPOSE_PROJECT}" ps --format '{{.ID}} {{.Name}}'
     ) \
-    | grep -vE '(jaeger|prometheus|grafana|wrkbench)' \
+    | grep -Ev '(^|[[:punct:]])(frontend|jaeger|jaeger-agent|grafana|prometheus|zipkin|otel|wrk|wrkbench)([[:punct:]]|$)' \
     | awk '{print $1}'
   )
 
