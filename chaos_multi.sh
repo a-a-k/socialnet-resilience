@@ -148,7 +148,8 @@ fi
 OUTDIR="${OUTDIR:-${REPO_ROOT}/results/${APP}/${MODE}}"
 mkdir -p "$OUTDIR"
 
-echo "=== Chaos test app=${APP} project=${COMPOSE_PROJECT} mode=${MODE} rounds=${ROUNDS} fail=${FAIL_FRACTION} seed=${SEED} ==="
+DEBUG=${DEBUG:-1}
+echo "=== Chaos test app=${APP} project=${COMPOSE_PROJECT} mode=${MODE} rounds=${ROUNDS} fail=${FAIL_FRACTION} seed=${SEED} DEBUG=${DEBUG} ==="
 echo "[wrk] url=${URL} lua=${LUA} rate=${RATE} dur=${DURATION_STR} threads=${THREADS} conns=${CONNS}"
 
 # ─── Helpers ─────────────────────────────────────────────────────────────
@@ -160,6 +161,7 @@ wait_ready() {
 
 run_wrk() {
   # ALWAYS echo two integers: "<total> <errors>"
+  # If DEBUG=1, also writes a TSV with detailed breakdown next to the logfile.
   local logfile="$1"
   local expected_total=$(( RATE * DURATION_SEC ))
   local total errors sock
@@ -170,36 +172,72 @@ run_wrk() {
   set -e
 
   if grep -q 'requests in' "$logfile"; then
-    total="$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}' | tail -1)"
+    total="$(grep -Eo '[0-9]+ requests in' "$logfile" | awk '{print $1}')"
   else
     # frontend fully down or wrk misparsed: assume all failed
     total="$expected_total"
     errors="$total"
+    # DEBUG: write breakdown
+    if [[ "${DEBUG:-1}" -eq 1 ]]; then
+      local dbg="${logfile%.log}.dbg.tsv"
+      echo -e "metric\tvalue" > "$dbg"
+      echo -e "total\t${total}" >> "$dbg"
+      echo -e "http_5xx\t${errors}" >> "$dbg"
+      echo -e "sock_connect\t0" >> "$dbg"
+      echo -e "sock_read\t0" >> "$dbg"
+      echo -e "sock_write\t0" >> "$dbg"
+      echo -e "sock_timeout\t0" >> "$dbg"
+      echo -e "errors_total\t${errors}" >> "$dbg"
+    fi
     echo "$total $errors"
     return
   fi
 
-  # Prefer the app‑aware "Status 5xx:" line (from our Lua summary)
-  if grep -qE '^Status 5xx:[[:space:]]+[0-9]+' "$logfile"; then
-    errors="$(awk '/^Status 5xx:/ {print $NF; exit}' "$logfile")"
-  # Fallback to wrk's generic counter if present
-  elif grep -qE '^Non-2xx or 3xx responses:' "$logfile"; then
-    errors="$(awk -F': ' '/^Non-2xx or 3xx responses:/ {print $2; exit}' "$logfile")"
-  else
-    errors="0"
+  # Parse errors from Status Code Summary (match chaos.sh): only Status 5xx + socket errors
+  errors=0
+  local http5xx=0 http4xx=0 http2xx=0
+  if grep -qE "Status 5xx:[[:space:]]+" "$logfile"; then
+    http5xx="$(grep -E "Status 5xx:[[:space:]]+[0-9]+" "$logfile" | awk '{print $NF}')"
+    errors="$http5xx"
+  fi
+  # Optionally capture 2xx/4xx for diagnostics (not used in errors)
+  if grep -qE "Status 2xx:[[:space:]]+" "$logfile"; then
+    http2xx="$(grep -E "Status 2xx:[[:space:]]+[0-9]+" "$logfile" | awk '{print $NF}')"
+  fi
+  if grep -qE "Status 4xx:[[:space:]]+" "$logfile"; then
+    http4xx="$(grep -E "Status 4xx:[[:space:]]+[0-9]+" "$logfile" | awk '{print $NF}')"
   fi
 
-  # Add socket errors (connect/read/write)
-  sock="$(awk '
-    /^Socket errors:/ {
-      for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+$/) s+=$i
-    }
-    END {print s+0}' "$logfile")"
-  errors=$(( ${errors:-0} + ${sock:-0} ))
+  # Socket errors: mirror chaos.sh implementation, and also break down components for debug
+  local sock_connect=0 sock_read=0 sock_write=0 sock_timeout=0
+  if grep -qE '^Socket errors:' "$logfile"; then
+    # Extract numbers by label if present. wrk usually prints: Socket errors: connect X, read Y, write Z, timeout T
+    sock_connect="$(grep -Eo 'Socket errors:.*connect[[:space:]]+[0-9]+' "$logfile" | grep -Eo '[0-9]+' | tail -1 || echo 0)"
+    sock_read="$(grep -Eo 'Socket errors:.*read[[:space:]]+[0-9]+' "$logfile"    | grep -Eo '[0-9]+' | tail -1 || echo 0)"
+    sock_write="$(grep -Eo 'Socket errors:.*write[[:space:]]+[0-9]+' "$logfile"   | grep -Eo '[0-9]+' | tail -1 || echo 0)"
+    sock_timeout="$(grep -Eo 'Socket errors:.*timeout[[:space:]]+[0-9]+' "$logfile" | grep -Eo '[0-9]+' | tail -1 || echo 0)"
+  fi
+  sock_errors=$(grep -Eo 'Socket errors:[^ ]+[[:space:]]*[0-9]+' "$logfile" | grep -Eo '[0-9]+' | paste -sd+ - | bc || echo 0)
+  errors=$(( ${errors:-0} + ${sock_errors:-0} ))
 
   # numeric guards
   [[ "$total"  =~ ^[0-9]+$ ]] || total="$expected_total"
   [[ "$errors" =~ ^[0-9]+$ ]] || errors=0
+
+  # DEBUG: write breakdown file
+  if [[ "${DEBUG:-1}" -eq 1 ]]; then
+    local dbg="${logfile%.log}.dbg.tsv"
+    echo -e "metric\tvalue" > "$dbg"
+    echo -e "total\t${total}" >> "$dbg"
+    echo -e "http_2xx\t${http2xx}" >> "$dbg"
+    echo -e "http_4xx\t${http4xx}" >> "$dbg"
+    echo -e "http_5xx\t${http5xx}" >> "$dbg"
+    echo -e "sock_connect\t${sock_connect}" >> "$dbg"
+    echo -e "sock_read\t${sock_read}" >> "$dbg"
+    echo -e "sock_write\t${sock_write}" >> "$dbg"
+    echo -e "sock_timeout\t${sock_timeout}" >> "$dbg"
+    echo -e "errors_total\t${errors}" >> "$dbg"
+  fi
 
   echo "$total $errors"
 }
@@ -208,12 +246,13 @@ random_kill() {
   # Kill a deterministic random subset of *business* containers for this app.
   local fraction="$1" ; local round="$2"
 
-  # Scope to the app's compose project; exclude monitoring/wrk helpers
+  # Use docker compose ps within the app directory; exclude monitoring/helper containers (match chaos.sh)
   mapfile -t containers < <(
-    docker ps \
-      --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
-      --format '{{.ID}} {{.Names}}' \
-    | grep -Ev '(^|[[:punct:]])(jaeger|jaeger-agent|grafana|prometheus|zipkin|otel|wrk|wrkbench)([[:punct:]]|$)' \
+    (
+      cd "${DSB_DIR}/${APP_DIR}" && \
+      $DC -p "${COMPOSE_PROJECT}" ps --format '{{.ID}} {{.Name}}'
+    ) \
+    | grep -vE '(jaeger|prometheus|grafana|wrkbench)' \
     | awk '{print $1}'
   )
 
@@ -258,11 +297,25 @@ for round in $(seq 1 "$ROUNDS"); do
   logfile="${OUTDIR}/wrk_${round}.log"
   read total errors < <(run_wrk "$logfile")
   if [[ "$total" =~ ^[0-9]+$ ]] && [[ "$errors" =~ ^[0-9]+$ ]]; then
-    echo "[Round $round] workload applied. Total: $total, Errors: $errors"
-    echo "[Round $round] Status code summary:"
-    grep -E '^Status ' "$logfile" | sort || true
-    echo "[Round $round] Socket errors:"
-    grep -E '^Socket errors:' "$logfile" || echo "None"
+    # Per-round debug R computation
+    if [[ "$total" -gt 0 ]]; then
+      R_round=$(python3 - "$errors" "$total" <<'PY'
+import sys
+E=int(sys.argv[1]); T=int(sys.argv[2])
+print(f"{1.0 - (E/float(T)):.6f}")
+PY
+      )
+    else
+      R_round="0.000000"
+    fi
+    echo "[Round $round] workload applied. Total: $total, Errors: $errors, R_round=${R_round}"
+
+    # Show detailed breakdown if debug file exists
+    dbgfile="${logfile%.log}.dbg.tsv"
+    if [[ -f "$dbgfile" ]]; then
+      echo "[Round $round] Breakdown (metric\tvalue):"
+      cat "$dbgfile"
+    fi
   else
     echo "[Round $round] ERROR: invalid wrk parse: total='$total' errors='$errors'"
     echo "[Round $round] --- wrk log tail ---"
@@ -293,6 +346,20 @@ for round in $(seq 1 "$ROUNDS"); do
   ((rounds++)) || true
   ((total_sum+=total)) || true
   ((error_sum+=errors)) || true
+
+  if [[ "${DEBUG:-1}" -eq 1 ]]; then
+    if [[ "$total_sum" -gt 0 ]]; then
+      R_cum=$(python3 - "$error_sum" "$total_sum" <<'PY'
+import sys
+err=int(sys.argv[1]); tot=int(sys.argv[2])
+print(f"{1.0 - (err/float(tot)):.6f}")
+PY
+      )
+    else
+      R_cum="0.000000"
+    fi
+    echo "[Round $round] cumulative: total_sum=$total_sum, error_sum=$error_sum, R_cum=${R_cum}"
+  fi
 
   # Optional diagnostic capture
   if [[ "$round" -eq 47 ]]; then
