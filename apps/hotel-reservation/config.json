@@ -5,7 +5,7 @@
     "script": "third_party/DeathStarBench/hotelReservation/wrk2/scripts/hotel-reservation/mixed-workload_type_1.lua",
     "threads": 2,
     "connections": 32,
-    "duration": "30s",
+    "duration": "60s",
     "rate": 300
   },
   "compose_project": "dsb-hotel-reservation",

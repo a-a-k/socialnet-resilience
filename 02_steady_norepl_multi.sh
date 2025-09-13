@@ -83,7 +83,7 @@ echo "primed..."
 
 # Small readiness wait for the frontend
 echo "[steady-norepl] waiting for frontend: ${URL}"
-timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
+timeout 30 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
 
 # Steady workload
 export LUA_INIT="url = \"$URL\""

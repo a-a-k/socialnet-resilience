@@ -83,7 +83,7 @@ esac
 echo "primed..."
 
 echo "[steady-repl] waiting for frontend: ${URL}"
-timeout 60 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
+timeout 30 bash -c "until curl -fsS '$URL' >/dev/null; do sleep 0.5; done" || true
 
 export LUA_INIT="url = \"$URL\""
 export LUA_INIT_5_1="$LUA_INIT"

@@ -5,7 +5,7 @@
     "script": "00_helpers/mixed-workload-5xx.lua",
     "threads": 2,
     "connections": 32,
-    "duration": "30s",
+    "duration": "60s",
     "rate": 300
   },
   "compose_project": "dsb-social-network",
