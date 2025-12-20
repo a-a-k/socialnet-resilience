@@ -12,7 +12,7 @@ git clone https://github.com/delimitrou/DeathStarBench.git > /dev/null 2>&1
 cd DeathStarBench
 cd socialNetwork
 
-mkdir -p 00_helpers
+mkdir -p helpers
 
 ### System packages (Ubuntu)
 sudo apt-get update -qq
@@ -40,7 +40,7 @@ fi
 ### Helper scripts
 cp ../../resilience.py          .
 cp "$REPO_ROOT/overrides/socialnetwork-jaeger.override.yml" ./docker-compose.override.yml
-cp ../../00_helpers/mixed-workload-5xx.lua wrk2/scripts/social-network/
+cp ../../helpers/mixed-workload-5xx.lua wrk2/scripts/social-network/
 
 ### Build wrk2 load-generator
 

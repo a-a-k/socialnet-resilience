@@ -136,8 +136,8 @@ Two separate pipelines collect theoretical and empirical results into a single s
 set -euo pipefail
 
 # Prepare environment
-./01_prepare_env.sh
-tests: ./02_steady_norepl.sh
+./prepare_env.sh
+tests: ./steady_norepl.sh
 ./chaos.sh --repl 0
 
 # Combine summaries
@@ -155,8 +155,8 @@ jq -n \
 set -euo pipefail
 
 # Prepare environment
-./01_prepare_env.sh
-./04_steady_repl.sh --repl 1
+./prepare_env.sh
+./steady_repl.sh --repl 1
 ./chaos.sh --repl 1
 
 # Combine summaries

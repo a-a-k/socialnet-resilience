@@ -16,11 +16,11 @@ fi
 source ./venv/bin/activate
 echo "✅  venv activated ($(python -V))"
 
-./01_prepare_env.sh
+./prepare_env.sh
 OUTDIR=${OUTDIR:-DeathStarBench/socialNetwork/results/norepl}
 OUTDIR=$(realpath -m "$OUTDIR")
 mkdir -p "$OUTDIR"
-SEED="$SEED" P_FAIL="$P_FAIL" FAIL_FRACTION="$FAIL_FRACTION" OUTDIR="$OUTDIR" ./02_steady_norepl.sh
+SEED="$SEED" P_FAIL="$P_FAIL" FAIL_FRACTION="$FAIL_FRACTION" OUTDIR="$OUTDIR" ./steady_norepl.sh
 SEED="$SEED" P_FAIL="$P_FAIL" FAIL_FRACTION="$FAIL_FRACTION" OUTDIR="$OUTDIR" ./chaos.sh
 
 MODEL="$OUTDIR/R_avg_base.json"
