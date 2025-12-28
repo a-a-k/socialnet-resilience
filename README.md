@@ -318,7 +318,7 @@ If you use this work, please cite:
   address   = {Rio de Janeiro, Brazil},
   publisher = {ACM},
   pages     = {5},
-  #doi       = {10.1145/nnnnnnn.nnnnnnn} — to be updated
+  #doi       = {[10.1145/3786582.3786823](https://doi.org/10.1145/3786582.3786823)}
 }
 ```
 
