@@ -79,108 +79,107 @@ jobs:
           echo "Commit: $GITHUB_SHA"
           echo "lite run: 2 seeds, 5 chaos windows"
           table="$(python3 - <<'PY'
-import glob
-import json
-import math
-import os
-import re
-import sys
+          import glob
+          import json
+          import math
+          import os
+          import re
+          import sys
 
-base = "artifacts"
-artifact_dirs = [d for d in glob.glob(os.path.join(base, "*")) if os.path.isdir(d)]
-if not artifact_dirs:
-    sys.stderr.write("No artifacts found in ./artifacts\n")
-    sys.exit(1)
+          base = "artifacts"
+          artifact_dirs = [d for d in glob.glob(os.path.join(base, "*")) if os.path.isdir(d)]
+          if not artifact_dirs:
+              sys.stderr.write("No artifacts found in ./artifacts\n")
+              sys.exit(1)
 
-pattern = re.compile(r"^(norepl|repl)-([0-9.]+)-seed(\\d+)$")
-groups = {}
+          pattern = re.compile(r"^(norepl|repl)-([0-9.]+)-seed(\\d+)$")
+          groups = {}
 
-def find_one(root, name):
-    matches = glob.glob(os.path.join(root, "**", name), recursive=True)
-    matches.sort()
-    return matches[0] if matches else None
+          def find_one(root, name):
+              matches = glob.glob(os.path.join(root, "**", name), recursive=True)
+              matches.sort()
+              return matches[0] if matches else None
 
-for artifact_dir in artifact_dirs:
-    name = os.path.basename(artifact_dir)
-    match = pattern.match(name)
-    if not match:
-        continue
-    mode, p_fail_str, seed_str = match.group(1), match.group(2), match.group(3)
-    seed = int(seed_str)
+          for artifact_dir in artifact_dirs:
+              name = os.path.basename(artifact_dir)
+              match = pattern.match(name)
+              if not match:
+                  continue
+              mode, p_fail_str, seed_str = match.group(1), match.group(2), match.group(3)
+              seed = int(seed_str)
 
-    summary_mode = find_one(artifact_dir, f"summary_{mode}.json")
-    if not summary_mode:
-        sys.stderr.write(f"Missing summary_{mode}.json in {artifact_dir}\n")
-        sys.exit(1)
+              summary_mode = find_one(artifact_dir, f"summary_{mode}.json")
+              if not summary_mode:
+                  sys.stderr.write(f"Missing summary_{mode}.json in {artifact_dir}\n")
+                  sys.exit(1)
 
-    with open(summary_mode, "r", encoding="utf-8") as f:
-        data = json.load(f)
+              with open(summary_mode, "r", encoding="utf-8") as f:
+                  data = json.load(f)
 
-    if mode == "norepl":
-        r_model_key = "R_model_norepl"
-        r_live_key = "R_live_norepl"
-    else:
-        r_model_key = "R_model_repl"
-        r_live_key = "R_live_repl"
+              if mode == "norepl":
+                  r_model_key = "R_model_norepl"
+                  r_live_key = "R_live_norepl"
+              else:
+                  r_model_key = "R_model_repl"
+                  r_live_key = "R_live_repl"
 
-    if r_model_key not in data or r_live_key not in data:
-        sys.stderr.write(f"Missing {r_model_key}/{r_live_key} in {summary_mode}\n")
-        sys.exit(1)
+              if r_model_key not in data or r_live_key not in data:
+                  sys.stderr.write(f"Missing {r_model_key}/{r_live_key} in {summary_mode}\n")
+                  sys.exit(1)
 
-    r_model = float(data[r_model_key])
-    r_live = float(data[r_live_key])
+              r_model = float(data[r_model_key])
+              r_live = float(data[r_live_key])
 
-    summary_live = find_one(artifact_dir, "summary.json")
-    rounds = None
-    if summary_live:
-        with open(summary_live, "r", encoding="utf-8") as f:
-            live_data = json.load(f)
-        rounds = live_data.get("rounds")
+              summary_live = find_one(artifact_dir, "summary.json")
+              rounds = None
+              if summary_live:
+                  with open(summary_live, "r", encoding="utf-8") as f:
+                      live_data = json.load(f)
+                  rounds = live_data.get("rounds")
 
-    key = (mode, p_fail_str)
-    entry = groups.setdefault(key, {"r_model": [], "r_live": [], "seeds": set(), "rounds": []})
-    entry["r_model"].append(r_model)
-    entry["r_live"].append(r_live)
-    entry["seeds"].add(seed)
-    if rounds is not None:
-        entry["rounds"].append(rounds)
+              key = (mode, p_fail_str)
+              entry = groups.setdefault(key, {"r_model": [], "r_live": [], "seeds": set(), "rounds": []})
+              entry["r_model"].append(r_model)
+              entry["r_live"].append(r_live)
+              entry["seeds"].add(seed)
+              if rounds is not None:
+                  entry["rounds"].append(rounds)
 
-if not groups:
-    sys.stderr.write("No summary data found in artifacts\n")
-    sys.exit(1)
+          if not groups:
+              sys.stderr.write("No summary data found in artifacts\n")
+              sys.exit(1)
 
-def mean(values):
-    return sum(values) / len(values)
+          def mean(values):
+              return sum(values) / len(values)
 
-def sample_sd(values):
-    n = len(values)
-    if n < 2:
-        return 0.0
-    mu = mean(values)
-    return math.sqrt(sum((x - mu) ** 2 for x in values) / (n - 1))
+          def sample_sd(values):
+              n = len(values)
+              if n < 2:
+                  return 0.0
+              mu = mean(values)
+              return math.sqrt(sum((x - mu) ** 2 for x in values) / (n - 1))
 
-rows = []
-for (mode, p_fail_str), entry in sorted(groups.items(), key=lambda x: (x[0][0], float(x[0][1]))):
-    r_model_mean = mean(entry["r_model"])
-    r_model_sd = sample_sd(entry["r_model"])
-    r_live_mean = mean(entry["r_live"])
-    r_live_sd = sample_sd(entry["r_live"])
-    seeds = ",".join(str(s) for s in sorted(entry["seeds"]))
-    if entry["rounds"]:
-        unique_rounds = sorted(set(entry["rounds"]))
-        rounds = str(unique_rounds[0]) if len(unique_rounds) == 1 else "varies"
-    else:
-        rounds = "unknown"
-    rows.append(
-        f"| {mode} | {p_fail_str} | {r_model_mean:.5f} | {r_model_sd:.5f} | "
-        f"{r_live_mean:.5f} | {r_live_sd:.5f} | {seeds} | {rounds} |"
-    )
+          rows = []
+          for (mode, p_fail_str), entry in sorted(groups.items(), key=lambda x: (x[0][0], float(x[0][1]))):
+              r_model_mean = mean(entry["r_model"])
+              r_model_sd = sample_sd(entry["r_model"])
+              r_live_mean = mean(entry["r_live"])
+              r_live_sd = sample_sd(entry["r_live"])
+              seeds = ",".join(str(s) for s in sorted(entry["seeds"]))
+              if entry["rounds"]:
+                  unique_rounds = sorted(set(entry["rounds"]))
+                  rounds = str(unique_rounds[0]) if len(unique_rounds) == 1 else "varies"
+              else:
+                  rounds = "unknown"
+              rows.append(
+                  f"| {mode} | {p_fail_str} | {r_model_mean:.5f} | {r_model_sd:.5f} | "
+                  f"{r_live_mean:.5f} | {r_live_sd:.5f} | {seeds} | {rounds} |"
+              )
 
-header = "| mode | p_fail | R_model_mean | R_model_sd | R_live_mean | R_live_sd | seeds | rounds |"
-separator = "|------|--------|--------------|------------|-------------|-----------|-------|--------|"
-table = "\n".join([header, separator] + rows)
-print(table)
-PY
-          )"
+          header = "| mode | p_fail | R_model_mean | R_model_sd | R_live_mean | R_live_sd | seeds | rounds |"
+          separator = "|------|--------|--------------|------------|-------------|-----------|-------|--------|"
+          table = "\n".join([header, separator] + rows)
+          print(table)
+          PY)"
           echo "$table"
           echo "$table" >> "$GITHUB_STEP_SUMMARY"
