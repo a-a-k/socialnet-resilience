@@ -180,6 +180,7 @@ jobs:
           separator = "|------|--------|--------------|------------|-------------|-----------|-------|--------|"
           table = "\n".join([header, separator] + rows)
           print(table)
-          PY)"
+          PY
+          )"
           echo "$table"
           echo "$table" >> "$GITHUB_STEP_SUMMARY"
