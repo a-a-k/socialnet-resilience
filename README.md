@@ -1,4 +1,4 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15396047.svg)](https://doi.org/10.5281/zenodo.15396047)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15332249.svg)](https://doi.org/10.5281/zenodo.15332249)
 
 # Social-Network Resilience
 
@@ -74,6 +74,15 @@ End-to-end steps to run locally (Docker daemon required):
    jq --version
    ```
 
+   Optional preflight (non-interactive dependency checks, no installs):
+
+   ```bash
+   ./scripts/preflight.sh
+
+   # Override DeathStarBench location
+   DEATHSTARBENCH_DIR=/path/to/DeathStarBench ./scripts/preflight.sh
+   ```
+
 4. **Run the pipelines** (they will call `prepare_env.sh` automatically, which may prompt for `sudo` to install system deps and clone DeathStarBench):
 
    ```bash
@@ -95,12 +104,17 @@ Optional tunables (affect both pipelines): `SEED`, `P_FAIL` (model failure proba
 ```
 README.md                      # This guide
 resilience.py                  # Theoretical Monte Carlo model
+deps.json                      # Example Jaeger dependency graph (used by smoke test)
 chaos.sh                       # Chaos experiment driver (wrk2 + random kills)
 steady_norepl.sh               # Steady-state prep + deps.json capture (no replicas)
 steady_repl.sh                 # Steady-state prep + deps.json capture (with replicas)
 pipeline_norepl.sh             # End-to-end non-replica pipeline
 pipeline_repl.sh               # End-to-end replica pipeline
 prepare_env.sh                 # Bootstrap DeathStarBench, system deps, wrk2
+.github/workflows/resilience-matrix.yml      # Full CI matrix workflow
+.github/workflows/resilience-matrix-lite.yml # Lite CI matrix workflow
+scripts/preflight.sh           # Non-interactive dependency checks
+scripts/smoke_test.sh          # Fast resilience.py smoke test (no Docker)
 helpers/mixed-workload-5xx.lua # wrk2 script used during chaos runs
 overrides/socialnetwork-jaeger.override.yml # Compose override enabling Jaeger tracing
 ```
@@ -138,6 +152,16 @@ python3 resilience.py DeathStarBench/socialNetwork/deps.json \
 
   * `R_avg`: weighted average availability.
   * `R_ep`: per-endpoint availability.
+
+### Smoke test (`resilience.py`)
+
+Fast local check that runs `resilience.py` with small samples and validates the output JSON (no Docker).
+
+```bash
+./scripts/smoke_test.sh
+```
+
+Overrides: `DEPS_JSON` (path, default `./deps.json`), `SMOKE_SAMPLES`, `SMOKE_P_FAIL`, `SMOKE_REPL` (0/1) or `SMOKE_REPLS` (space-separated list). By default it runs both repl and no-repl.
 
 ---
 
@@ -276,20 +300,30 @@ Tips for reuse/repurposing:
 
 ## CI / GitHub Actions
 
-Workflow file: `.github/workflows/resilience-matrix.yml` (manual `workflow_dispatch`).
+Workflow files (manual `workflow_dispatch`):
 
-How to run on GitHub:
+* `.github/workflows/resilience-matrix.yml` (full)
+* `.github/workflows/resilience-matrix-lite.yml` (lite: 2 seeds, 5 chaos windows)
+
+How to run on GitHub (full):
 
 1) Push your changes to a branch.
 2) In GitHub → Actions → **Resilience-Matrix** → **Run workflow**, pick the branch and trigger.
 3) The matrix runs both modes (`norepl`, `repl`) across `fail_fraction` ∈ {0.1,0.3,0.5,0.7,0.9} and seeds {1,2}.
 4) Download artifacts named `${mode}-${fail_fraction}-seed${seed}`; each contains JSONs under `DeathStarBench/socialNetwork/results/${mode}-${fail_fraction}-${seed}`.
 
-In GitHub Actions, the included workflow runs both pipelines across a matrix and uploads the results stored in `DeathStarBench/socialNetwork/results/...`:
+How to run on GitHub (lite):
 
-* Workflow: `.github/workflows/resilience-matrix.yml`.
-* Matrix dimensions: `mode` (norepl|repl), `fail_fraction` (0.1–0.9), `seed` (1,2).
-* Per-job `OUTDIR`: `DeathStarBench/socialNetwork/results/${mode}-${fail_fraction}-${seed}`.
+1) Push your changes to a branch.
+2) In GitHub → Actions → **Resilience-Matrix-Lite** → **Run workflow**, pick the branch and trigger.
+3) The matrix runs both modes across `p_fail` ∈ {0.1,0.3,0.5,0.7,0.9} and seeds {16,17} (20 jobs total) with `ROUNDS=5`.
+4) The aggregate job prints a Markdown table in the run summary.
+
+In GitHub Actions, the workflows run both pipelines across a matrix and upload the results stored in `DeathStarBench/socialNetwork/results/...`:
+
+* Full workflow: `.github/workflows/resilience-matrix.yml`.
+* Lite workflow: `.github/workflows/resilience-matrix-lite.yml`.
+* Per-job `OUTDIR`: `DeathStarBench/socialNetwork/results/${mode}-${fail_fraction}-${seed}` (full) or `${mode}-${p_fail}-${seed}` (lite).
 
 ```yaml
 - name: Run pipelines
