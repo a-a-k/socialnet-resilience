@@ -83,71 +83,69 @@ jobs:
           import json
           import math
           import os
-          import re
           import sys
 
           base = "artifacts"
-          artifact_dirs = [d for d in glob.glob(os.path.join(base, "*")) if os.path.isdir(d)]
-          if not artifact_dirs:
-              sys.stderr.write("No artifacts found in ./artifacts\n")
+          summary_files = glob.glob(os.path.join(base, "**", "summary_norepl.json"), recursive=True)
+          summary_files += glob.glob(os.path.join(base, "**", "summary_repl.json"), recursive=True)
+          if not summary_files:
+              sys.stderr.write("No summary files found in artifacts\n")
               sys.exit(1)
 
-          pattern = re.compile(r"^(norepl|repl)-([0-9.]+)-seed(\\d+)$")
           groups = {}
 
-          def find_one(root, name):
-              matches = glob.glob(os.path.join(root, "**", name), recursive=True)
-              matches.sort()
-              return matches[0] if matches else None
+          for summary_path in summary_files:
+              mode = "norepl" if summary_path.endswith("summary_norepl.json") else "repl"
+              base_dir = os.path.dirname(summary_path)
 
-          for artifact_dir in artifact_dirs:
-              name = os.path.basename(artifact_dir)
-              match = pattern.match(name)
-              if not match:
-                  continue
-              mode, p_fail_str, seed_str = match.group(1), match.group(2), match.group(3)
-              seed = int(seed_str)
-
-              summary_mode = find_one(artifact_dir, f"summary_{mode}.json")
-              if not summary_mode:
-                  sys.stderr.write(f"Missing summary_{mode}.json in {artifact_dir}\n")
-                  sys.exit(1)
-
-              with open(summary_mode, "r", encoding="utf-8") as f:
+              with open(summary_path, "r", encoding="utf-8") as f:
                   data = json.load(f)
 
               if mode == "norepl":
                   r_model_key = "R_model_norepl"
                   r_live_key = "R_live_norepl"
+                  r_avg_name = "R_avg_base.json"
               else:
                   r_model_key = "R_model_repl"
                   r_live_key = "R_live_repl"
+                  r_avg_name = "R_avg_repl.json"
 
               if r_model_key not in data or r_live_key not in data:
-                  sys.stderr.write(f"Missing {r_model_key}/{r_live_key} in {summary_mode}\n")
+                  sys.stderr.write(f"Missing {r_model_key}/{r_live_key} in {summary_path}\n")
                   sys.exit(1)
 
               r_model = float(data[r_model_key])
               r_live = float(data[r_live_key])
 
-              summary_live = find_one(artifact_dir, "summary.json")
+              r_avg_path = os.path.join(base_dir, r_avg_name)
+              if not os.path.exists(r_avg_path):
+                  sys.stderr.write(f"Missing {r_avg_name} in {base_dir}\n")
+                  sys.exit(1)
+
+              with open(r_avg_path, "r", encoding="utf-8") as f:
+                  r_avg = json.load(f)
+
+              if "p_fail" not in r_avg or "seed" not in r_avg:
+                  sys.stderr.write(f"Missing p_fail/seed in {r_avg_path}\n")
+                  sys.exit(1)
+
+              p_fail = float(r_avg["p_fail"])
+              seed = int(r_avg["seed"])
+
+              summary_live = os.path.join(base_dir, "summary.json")
               rounds = None
-              if summary_live:
+              if os.path.exists(summary_live):
                   with open(summary_live, "r", encoding="utf-8") as f:
                       live_data = json.load(f)
                   rounds = live_data.get("rounds")
 
-              key = (mode, p_fail_str)
+              key = (mode, p_fail)
               entry = groups.setdefault(key, {"r_model": [], "r_live": [], "seeds": set(), "rounds": []})
               entry["r_model"].append(r_model)
               entry["r_live"].append(r_live)
               entry["seeds"].add(seed)
               if rounds is not None:
                   entry["rounds"].append(rounds)
-
-          if not groups:
-              sys.stderr.write("No summary data found in artifacts\n")
-              sys.exit(1)
 
           def mean(values):
               return sum(values) / len(values)
@@ -160,7 +158,7 @@ jobs:
               return math.sqrt(sum((x - mu) ** 2 for x in values) / (n - 1))
 
           rows = []
-          for (mode, p_fail_str), entry in sorted(groups.items(), key=lambda x: (x[0][0], float(x[0][1]))):
+          for (mode, p_fail), entry in sorted(groups.items(), key=lambda x: (x[0][0], x[0][1])):
               r_model_mean = mean(entry["r_model"])
               r_model_sd = sample_sd(entry["r_model"])
               r_live_mean = mean(entry["r_live"])
@@ -172,7 +170,7 @@ jobs:
               else:
                   rounds = "unknown"
               rows.append(
-                  f"| {mode} | {p_fail_str} | {r_model_mean:.5f} | {r_model_sd:.5f} | "
+                  f"| {mode} | {p_fail:g} | {r_model_mean:.5f} | {r_model_sd:.5f} | "
                   f"{r_live_mean:.5f} | {r_live_sd:.5f} | {seeds} | {rounds} |"
               )
 
