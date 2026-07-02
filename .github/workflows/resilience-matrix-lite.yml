@@ -19,7 +19,7 @@ on:
 jobs:
   simulate-lite:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       OUTDIR: results/mb3r-lite/${{ matrix.mode }}-${{ matrix.p_fail }}-seed${{ matrix.seed }}
       SAMPLES: ${{ inputs.samples || '500000' }}

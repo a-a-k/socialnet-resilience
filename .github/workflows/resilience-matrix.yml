@@ -19,7 +19,7 @@ on:
 jobs:
   simulate:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 360
     env:
       OUTDIR: results/mb3r/${{ matrix.mode }}-${{ matrix.p_fail }}-seed${{ matrix.seed }}
       SAMPLES: ${{ inputs.samples || '500000' }}
