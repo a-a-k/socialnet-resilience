@@ -14,11 +14,11 @@ on:
       sheaft_version:
         description: Sheaft release version
         required: false
-        default: "1.0.0"
+        default: "1.1.0"
       sampling_mode:
         description: Sheaft sampling mode
         required: false
-        default: "independent_replica"
+        default: "fixed_k_replica_slots"
 
 jobs:
   simulate:
@@ -28,8 +28,8 @@ jobs:
       OUTDIR: results/mb3r/${{ matrix.mode }}-${{ matrix.p_fail }}-seed${{ matrix.seed }}
       SAMPLES: ${{ inputs.samples || '500000' }}
       BERING_VERSION: ${{ inputs.bering_version || '1.0.0' }}
-      SHEAFT_VERSION: ${{ inputs.sheaft_version || '1.0.0' }}
-      SAMPLING_MODE: ${{ inputs.sampling_mode || 'independent_replica' }}
+      SHEAFT_VERSION: ${{ inputs.sheaft_version || '1.1.0' }}
+      SAMPLING_MODE: ${{ inputs.sampling_mode || 'fixed_k_replica_slots' }}
     strategy:
       fail-fast: false
       matrix:

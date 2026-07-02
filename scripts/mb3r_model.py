@@ -79,7 +79,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sampling-mode",
         choices=["independent_replica", "fixed_k_replica_slots"],
-        default="independent_replica",
+        default="fixed_k_replica_slots",
     )
     parser.add_argument("--verbose", action="store_true", help="print toolchain commands")
     parser.add_argument(
