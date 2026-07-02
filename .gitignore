@@ -1,1 +1,5 @@
 .idea/
+venv/
+results/
+__pycache__/
+*.pyc

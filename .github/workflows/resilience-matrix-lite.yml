@@ -1,14 +1,30 @@
-name: Resilience-Matrix-Lite
+name: MB3R-Simulation-Matrix-Lite
 
 on:
   workflow_dispatch:
+    inputs:
+      samples:
+        description: Sheaft Monte Carlo trials per job
+        required: false
+        default: "500000"
+      bering_version:
+        description: Bering release version
+        required: false
+        default: "1.0.0"
+      sheaft_version:
+        description: Sheaft release version
+        required: false
+        default: "1.0.0"
 
 jobs:
-  bench-lite:
+  simulate-lite:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 60
     env:
-      OUTDIR: DeathStarBench/socialNetwork/results/${{ matrix.mode }}-${{ matrix.p_fail }}-${{ matrix.seed }}
+      OUTDIR: results/mb3r-lite/${{ matrix.mode }}-${{ matrix.p_fail }}-seed${{ matrix.seed }}
+      SAMPLES: ${{ inputs.samples || '500000' }}
+      BERING_VERSION: ${{ inputs.bering_version || '1.0.0' }}
+      SHEAFT_VERSION: ${{ inputs.sheaft_version || '1.0.0' }}
     strategy:
       fail-fast: false
       matrix:
@@ -18,167 +34,57 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Free space
-        run: |
-          sudo rm -rf /opt/hostedtoolcache /usr/local/lib/android || true
-
-      - uses: docker/setup-buildx-action@v2
-
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-buildx-
-
-      - name: Make scripts executable
-        run: chmod +x $(git ls-files '*.sh')
-
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.12"
 
-      - name: Install Python dependencies
+      - name: Install MB3R CLIs
         run: |
-          python -m pip install --upgrade pip
-          pip install numpy networkx scipy
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mb3r-bin"
+          curl -fsSL -o "$RUNNER_TEMP/bering.tar.gz" \
+            "https://github.com/MB3R-Lab/Bering/releases/download/v${BERING_VERSION}/bering_${BERING_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/sheaft.tar.gz" \
+            "https://github.com/MB3R-Lab/Sheaft/releases/download/v${SHEAFT_VERSION}/sheaft_${SHEAFT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf "$RUNNER_TEMP/bering.tar.gz" -C "$RUNNER_TEMP/mb3r-bin" bering
+          tar -xzf "$RUNNER_TEMP/sheaft.tar.gz" -C "$RUNNER_TEMP/mb3r-bin" sheaft
+          chmod +x "$RUNNER_TEMP/mb3r-bin/bering" "$RUNNER_TEMP/mb3r-bin/sheaft"
+          echo "$RUNNER_TEMP/mb3r-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/mb3r-bin/bering" --help >/dev/null
+          "$RUNNER_TEMP/mb3r-bin/sheaft" --help >/dev/null
 
-      - name: Run pipeline
-        env:
-          COMPOSE_DOCKER_CLI_BUILD: 1
-          DOCKER_BUILDKIT: 1
-          SEED: ${{ matrix.seed }}
-          FAIL_FRACTION: ${{ matrix.p_fail }}
-          P_FAIL: ${{ matrix.p_fail }}
-          ROUNDS: 5
+      - name: Run MB3R simulation
         run: |
-          chmod +x pipeline_${{ matrix.mode }}.sh
-          ./pipeline_${{ matrix.mode }}.sh
+          set -euo pipefail
+          mkdir -p "$OUTDIR"
+          if [ "${{ matrix.mode }}" = "repl" ]; then
+            repl=1
+            out_file="$OUTDIR/R_avg_repl.json"
+          else
+            repl=0
+            out_file="$OUTDIR/R_avg_base.json"
+          fi
+          python3 scripts/mb3r_model.py deps.json \
+            --samples "$SAMPLES" \
+            --p_fail "${{ matrix.p_fail }}" \
+            --seed "${{ matrix.seed }}" \
+            --repl "$repl" \
+            -o "$out_file" \
+            --workdir "$OUTDIR/work" \
+            --bering bering \
+            --sheaft sheaft
 
       - name: Upload results
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: "${{ matrix.mode }}-${{ matrix.p_fail }}-seed${{ matrix.seed }}"
-          path: ${{ env.OUTDIR }}/*.json
+          path: |
+            ${{ env.OUTDIR }}/*.json
+            ${{ env.OUTDIR }}/work/topology_api.json
+            ${{ env.OUTDIR }}/work/analysis.json
+            ${{ env.OUTDIR }}/work/bering-model.json
+            ${{ env.OUTDIR }}/work/bering-snapshot.json
+            ${{ env.OUTDIR }}/work/sheaft/report.json
           if-no-files-found: error
-
-  aggregate:
-    runs-on: ubuntu-22.04
-    needs: bench-lite
-    timeout-minutes: 10
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Aggregate summaries
-        run: |
-          echo "Commit: $GITHUB_SHA"
-          echo "lite run: 2 seeds, 5 chaos windows"
-          table="$(python3 - <<'PY'
-          import glob
-          import json
-          import math
-          import os
-          import sys
-
-          base = "artifacts"
-          summary_files = glob.glob(os.path.join(base, "**", "summary_norepl.json"), recursive=True)
-          summary_files += glob.glob(os.path.join(base, "**", "summary_repl.json"), recursive=True)
-          if not summary_files:
-              sys.stderr.write("No summary files found in artifacts\n")
-              sys.exit(1)
-
-          groups = {}
-
-          for summary_path in summary_files:
-              mode = "norepl" if summary_path.endswith("summary_norepl.json") else "repl"
-              base_dir = os.path.dirname(summary_path)
-
-              with open(summary_path, "r", encoding="utf-8") as f:
-                  data = json.load(f)
-
-              if mode == "norepl":
-                  r_model_key = "R_model_norepl"
-                  r_live_key = "R_live_norepl"
-                  r_avg_name = "R_avg_base.json"
-              else:
-                  r_model_key = "R_model_repl"
-                  r_live_key = "R_live_repl"
-                  r_avg_name = "R_avg_repl.json"
-
-              if r_model_key not in data or r_live_key not in data:
-                  sys.stderr.write(f"Missing {r_model_key}/{r_live_key} in {summary_path}\n")
-                  sys.exit(1)
-
-              r_model = float(data[r_model_key])
-              r_live = float(data[r_live_key])
-
-              r_avg_path = os.path.join(base_dir, r_avg_name)
-              if not os.path.exists(r_avg_path):
-                  sys.stderr.write(f"Missing {r_avg_name} in {base_dir}\n")
-                  sys.exit(1)
-
-              with open(r_avg_path, "r", encoding="utf-8") as f:
-                  r_avg = json.load(f)
-
-              if "p_fail" not in r_avg or "seed" not in r_avg:
-                  sys.stderr.write(f"Missing p_fail/seed in {r_avg_path}\n")
-                  sys.exit(1)
-
-              p_fail = float(r_avg["p_fail"])
-              seed = int(r_avg["seed"])
-
-              summary_live = os.path.join(base_dir, "summary.json")
-              rounds = None
-              if os.path.exists(summary_live):
-                  with open(summary_live, "r", encoding="utf-8") as f:
-                      live_data = json.load(f)
-                  rounds = live_data.get("rounds")
-
-              key = (mode, p_fail)
-              entry = groups.setdefault(key, {"r_model": [], "r_live": [], "seeds": set(), "rounds": []})
-              entry["r_model"].append(r_model)
-              entry["r_live"].append(r_live)
-              entry["seeds"].add(seed)
-              if rounds is not None:
-                  entry["rounds"].append(rounds)
-
-          def mean(values):
-              return sum(values) / len(values)
-
-          def sample_sd(values):
-              n = len(values)
-              if n < 2:
-                  return 0.0
-              mu = mean(values)
-              return math.sqrt(sum((x - mu) ** 2 for x in values) / (n - 1))
-
-          rows = []
-          for (mode, p_fail), entry in sorted(groups.items(), key=lambda x: (x[0][0], x[0][1])):
-              r_model_mean = mean(entry["r_model"])
-              r_model_sd = sample_sd(entry["r_model"])
-              r_live_mean = mean(entry["r_live"])
-              r_live_sd = sample_sd(entry["r_live"])
-              seeds = ",".join(str(s) for s in sorted(entry["seeds"]))
-              if entry["rounds"]:
-                  unique_rounds = sorted(set(entry["rounds"]))
-                  rounds = str(unique_rounds[0]) if len(unique_rounds) == 1 else "varies"
-              else:
-                  rounds = "unknown"
-              rows.append(
-                  f"| {mode} | {p_fail:g} | {r_model_mean:.5f} | {r_model_sd:.5f} | "
-                  f"{r_live_mean:.5f} | {r_live_sd:.5f} | {seeds} | {rounds} |"
-              )
-
-          header = "| mode | p_fail | R_model_mean | R_model_sd | R_live_mean | R_live_sd | seeds | rounds |"
-          separator = "|------|--------|--------------|------------|-------------|-----------|-------|--------|"
-          table = "\n".join([header, separator] + rows)
-          print(table)
-          PY
-          )"
-          echo "$table"
-          echo "$table" >> "$GITHUB_STEP_SUMMARY"
