@@ -7,7 +7,7 @@ This keeps the old output shape produced by resilience.py:
 
 The old script remains the baseline oracle. This runner is intentionally small:
 it converts Jaeger deps.json into Bering topology_api JSON, runs Bering, runs
-Sheaft with independent_replica sampling, and extracts the aggregate numbers
+Sheaft with the requested sampling mode, and extracts the aggregate numbers
 from Sheaft's report.json.
 """
 
@@ -76,6 +76,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--p_fail", type=float, default=0.30)
     parser.add_argument("--seed", type=int, default=16)
     parser.add_argument("--repl", type=int, choices=[0, 1], default=0)
+    parser.add_argument(
+        "--sampling-mode",
+        choices=["independent_replica", "fixed_k_replica_slots"],
+        default="independent_replica",
+    )
     parser.add_argument("--verbose", action="store_true", help="print toolchain commands")
     parser.add_argument(
         "--bering",
@@ -180,17 +185,17 @@ def build_analysis(args: argparse.Namespace) -> dict[str, Any]:
         "schema_version": "1.0",
         "seed": args.seed,
         "trials": args.samples,
-        "sampling_mode": "independent_replica",
+        "sampling_mode": args.sampling_mode,
         "failure_probability": args.p_fail,
         "endpoint_weights": {
             endpoint_id: spec["weight"] for endpoint_id, spec in ENDPOINTS.items()
         },
         "profiles": [
             {
-                "name": "independent-replica",
+                "name": args.sampling_mode,
                 "trials": args.samples,
                 "seed": args.seed,
-                "sampling_mode": "independent_replica",
+                "sampling_mode": args.sampling_mode,
                 "failure_probability": args.p_fail,
             }
         ],
@@ -220,7 +225,7 @@ def extract_result(report_path: Path, args: argparse.Namespace) -> dict[str, Any
     r_ep = {
         item["endpoint_id"]: round(float(item["availability"]), 5)
         for item in endpoint_results
-        if item.get("profile") == "independent-replica"
+        if item.get("profile") == args.sampling_mode
     }
     missing = sorted(set(ENDPOINTS) - set(r_ep))
     if missing:
@@ -233,14 +238,20 @@ def extract_result(report_path: Path, args: argparse.Namespace) -> dict[str, Any
     if r_avg is None:
         raise ValueError("report summary does not contain aggregate availability")
 
-    return {
+    result = {
         "R_avg": round(float(r_avg), 5),
         "R_ep": r_ep,
         "samples": args.samples,
         "p_fail": args.p_fail,
         "seed": args.seed,
-        "sampling_mode": "independent_replica",
+        "sampling_mode": args.sampling_mode,
     }
+    for profile in report.get("profiles") or []:
+        simulation = profile.get("simulation") or {}
+        if profile.get("name") == args.sampling_mode and "fixed_k_failures" in simulation:
+            result["fixed_k_failures"] = int(simulation["fixed_k_failures"])
+            break
+    return result
 
 
 def main() -> int:

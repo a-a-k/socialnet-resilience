@@ -15,6 +15,10 @@ on:
         description: Sheaft release version
         required: false
         default: "1.0.0"
+      sampling_mode:
+        description: Sheaft sampling mode
+        required: false
+        default: "independent_replica"
 
 jobs:
   simulate-lite:
@@ -25,6 +29,7 @@ jobs:
       SAMPLES: ${{ inputs.samples || '500000' }}
       BERING_VERSION: ${{ inputs.bering_version || '1.0.0' }}
       SHEAFT_VERSION: ${{ inputs.sheaft_version || '1.0.0' }}
+      SAMPLING_MODE: ${{ inputs.sampling_mode || 'independent_replica' }}
     strategy:
       fail-fast: false
       matrix:
@@ -70,6 +75,7 @@ jobs:
             --p_fail "${{ matrix.p_fail }}" \
             --seed "${{ matrix.seed }}" \
             --repl "$repl" \
+            --sampling-mode "$SAMPLING_MODE" \
             -o "$out_file" \
             --workdir "$OUTDIR/work" \
             --bering bering \
