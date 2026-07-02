@@ -1,64 +1,96 @@
-name: Resilience-Matrix
+name: MB3R-Simulation-Matrix
 
 on:
   workflow_dispatch:
+    inputs:
+      samples:
+        description: Sheaft Monte Carlo trials per job
+        required: false
+        default: "500000"
+      bering_version:
+        description: Bering release version
+        required: false
+        default: "1.0.0"
+      sheaft_version:
+        description: Sheaft release version
+        required: false
+        default: "1.1.0"
+      sampling_mode:
+        description: Sheaft sampling mode
+        required: false
+        default: "fixed_k_replica_slots"
 
 jobs:
-  bench:
+  simulate:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     env:
-      OUTDIR: DeathStarBench/socialNetwork/results/${{ matrix.mode }}-${{ matrix.fail_fraction }}-${{ matrix.seed }}
+      OUTDIR: results/mb3r/${{ matrix.mode }}-${{ matrix.p_fail }}-seed${{ matrix.seed }}
+      SAMPLES: ${{ inputs.samples || '500000' }}
+      BERING_VERSION: ${{ inputs.bering_version || '1.0.0' }}
+      SHEAFT_VERSION: ${{ inputs.sheaft_version || '1.1.0' }}
+      SAMPLING_MODE: ${{ inputs.sampling_mode || 'fixed_k_replica_slots' }}
     strategy:
       fail-fast: false
       matrix:
         mode: [norepl, repl]
-        fail_fraction: [0.1, 0.3, 0.5, 0.7, 0.9]
+        p_fail: [0.1, 0.3, 0.5, 0.7, 0.9]
         seed: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Free space
-        run: |
-          sudo rm -rf /opt/hostedtoolcache /usr/local/lib/android || true
-
-      - uses: docker/setup-buildx-action@v2
-
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-buildx-
-
-      - name: Make scripts executable
-        run: chmod +x $(git ls-files '*.sh')
-
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.12"
 
-      - name: Install Python dependencies
+      - name: Install MB3R CLIs
         run: |
-          python -m pip install --upgrade pip
-          pip install numpy networkx scipy
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mb3r-bin"
+          curl -fsSL -o "$RUNNER_TEMP/bering.tar.gz" \
+            "https://github.com/MB3R-Lab/Bering/releases/download/v${BERING_VERSION}/bering_${BERING_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/sheaft.tar.gz" \
+            "https://github.com/MB3R-Lab/Sheaft/releases/download/v${SHEAFT_VERSION}/sheaft_${SHEAFT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf "$RUNNER_TEMP/bering.tar.gz" -C "$RUNNER_TEMP/mb3r-bin" bering
+          tar -xzf "$RUNNER_TEMP/sheaft.tar.gz" -C "$RUNNER_TEMP/mb3r-bin" sheaft
+          chmod +x "$RUNNER_TEMP/mb3r-bin/bering" "$RUNNER_TEMP/mb3r-bin/sheaft"
+          echo "$RUNNER_TEMP/mb3r-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/mb3r-bin/bering" --help >/dev/null
+          "$RUNNER_TEMP/mb3r-bin/sheaft" --help >/dev/null
 
-      - name: Run pipeline
-        env:
-          COMPOSE_DOCKER_CLI_BUILD: 1
-          DOCKER_BUILDKIT: 1
-          SEED: ${{ matrix.seed }}
-          FAIL_FRACTION: ${{ matrix.fail_fraction }}
-          P_FAIL: ${{ matrix.fail_fraction }}
+      - name: Run MB3R simulation
         run: |
-          chmod +x pipeline_${{ matrix.mode }}.sh
-          ./pipeline_${{ matrix.mode }}.sh
+          set -euo pipefail
+          mkdir -p "$OUTDIR"
+          if [ "${{ matrix.mode }}" = "repl" ]; then
+            repl=1
+            out_file="$OUTDIR/R_avg_repl.json"
+          else
+            repl=0
+            out_file="$OUTDIR/R_avg_base.json"
+          fi
+          python3 scripts/mb3r_model.py deps.json \
+            --samples "$SAMPLES" \
+            --p_fail "${{ matrix.p_fail }}" \
+            --seed "${{ matrix.seed }}" \
+            --repl "$repl" \
+            --sampling-mode "$SAMPLING_MODE" \
+            -o "$out_file" \
+            --workdir "$OUTDIR/work" \
+            --bering bering \
+            --sheaft sheaft
 
       - name: Upload results
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.mode }}-${{ matrix.fail_fraction }}-seed${{ matrix.seed }}"
-          path: ${{ env.OUTDIR }}/*.json
+          name: "${{ matrix.mode }}-${{ matrix.p_fail }}-seed${{ matrix.seed }}"
+          path: |
+            ${{ env.OUTDIR }}/*.json
+            ${{ env.OUTDIR }}/work/topology_api.json
+            ${{ env.OUTDIR }}/work/analysis.json
+            ${{ env.OUTDIR }}/work/bering-model.json
+            ${{ env.OUTDIR }}/work/bering-snapshot.json
+            ${{ env.OUTDIR }}/work/sheaft/report.json
           if-no-files-found: error
